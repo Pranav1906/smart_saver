@@ -3,6 +3,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:dio/dio.dart';
+import 'package:open_file/open_file.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'dart:async';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -93,6 +98,7 @@ class _DownloadTabState extends State<_DownloadTab> with SingleTickerProviderSta
   final TextEditingController _controller = TextEditingController();
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -115,44 +121,182 @@ class _DownloadTabState extends State<_DownloadTab> with SingleTickerProviderSta
   Future<void> _handleDownload() async {
     final url = _controller.text.trim();
 
-    if (url.isEmpty || !url.contains("instagram.com")) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter a valid Instagram Reels URL")),
-      );
+    if (url.isEmpty) {
+      _showSnackBar("Please enter a valid URL");
       return;
     }
 
-    try {
-      final response = await http.post(
-        Uri.parse('http://10.0.2.2:5000/download/reel'), // Change to IP for real device
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'url': url}),
-      );
+    // Validate URL based on platform
+    String endpoint = '';
+    String validationError = "";
+    
+    switch (widget.platform) {
+      case 'Reels':
+        if (!url.contains("instagram.com") && !url.contains("instagr.am")) {
+          validationError = "Please enter a valid Instagram Reels URL";
+        }
+        endpoint = 'download/reel';
+        break;
+      case 'Shorts':
+        if (!url.contains("youtube.com") && !url.contains("youtu.be")) {
+          validationError = "Please enter a valid YouTube Shorts URL";
+        }
+        endpoint = 'download/shorts';
+        break;
+      case 'WhatsApp':
+        endpoint = 'download/whatsapp';
+        break;
+      default:
+        validationError = "Unknown platform";
+    }
 
+    if (endpoint.isEmpty) {
+      _showSnackBar("Unknown platform", isError: true);
+      return;
+    }
+
+    if (validationError.isNotEmpty) {
+      _showSnackBar(validationError, isError: true);
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    http.Response? response;
+    try {
+      // Show loading indicator
+      _showSnackBar("Processing your request... Please wait", isLoading: true);
+
+      response = await http.post(
+        Uri.parse('http://10.0.2.2:3000/$endpoint'), // Change to your actual IP for real device
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: json.encode({'url': url}),
+      ).timeout(const Duration(seconds: 45));
+    } on SocketException {
+      _showSnackBar('Network error. Check your connection.', isError: true);
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    } on TimeoutException {
+      _showSnackBar('Request timed out. Please try again.', isError: true);
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    } catch (e) {
+      _showSnackBar('Error: ${e.toString()}', isError: true);
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    // Now handle the response and file download
+    try {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final fileUrl = data['fileUrl'];
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Download successful! Opening...")),
-        );
+        _showSnackBar("Download successful! Opening file...", isSuccess: true);
 
-        if (await canLaunchUrl(Uri.parse(fileUrl))) {
-          await launchUrl(Uri.parse(fileUrl), mode: LaunchMode.externalApplication);
-        } else {
-          throw 'Could not open download link.';
+        // Clear the text field
+        _controller.clear();
+
+        // Wait a moment before launching
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        final tempDir = await getTemporaryDirectory();
+        final fileName = fileUrl.split('/').last;
+        final filePath = '${tempDir.path}/$fileName';
+
+        // Download the file
+        await Dio().download(fileUrl, filePath);
+
+        // Show download complete message
+        _showSnackBar("Download complete! Opening file...", isSuccess: true);
+
+        // Try to open the file, but don't show a network error if it fails
+        try {
+          await OpenFile.open(filePath);
+        } catch (e) {
+          _showSnackBar("File downloaded, but could not be opened.", isError: true);
         }
       } else {
         final err = json.decode(response.body);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed: ${err['error'] ?? 'Unknown error'}')),
-        );
+        _showSnackBar('Failed: ${err['error'] ?? 'Unknown error'}', isError: true);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      _showSnackBar('Download failed: ${e.toString()}', isError: true);
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
+  }
+
+  void _showSnackBar(String message, {bool isError = false, bool isSuccess = false, bool isLoading = false}) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            if (isLoading) 
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              )
+            else if (isSuccess)
+              const Icon(Icons.check_circle, color: Colors.white, size: 20)
+            else if (isError)
+              const Icon(Icons.error, color: Colors.white, size: 20)
+            else
+              const Icon(Icons.info, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: isError 
+          ? Colors.red.shade600 
+          : isSuccess 
+            ? Colors.green.shade600 
+            : Colors.blue.shade600,
+        duration: Duration(seconds: isLoading ? 10 : 4),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  String _getPlatformHint() {
+    switch (widget.platform) {
+      case 'Reels':
+        return 'e.g., https://instagram.com/reel/...';
+      case 'Shorts':
+        return 'e.g., https://youtube.com/shorts/...';
+      case 'WhatsApp':
+        return 'WhatsApp status download';
+      default:
+        return 'Enter link here';
+    }
+  }
+
+  bool _isPlatformSupported() {
+    return widget.platform != 'WhatsApp'; // WhatsApp is not fully implemented
   }
 
   @override
@@ -163,7 +307,7 @@ class _DownloadTabState extends State<_DownloadTab> with SingleTickerProviderSta
         child: SingleChildScrollView(
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 24),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.10),
               borderRadius: BorderRadius.circular(24),
@@ -179,41 +323,61 @@ class _DownloadTabState extends State<_DownloadTab> with SingleTickerProviderSta
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  widget.platform == 'WhatsApp'
-                      ? Icons.chat
-                      : widget.platform == 'Reels'
-                          ? Icons.video_library
-                          : Icons.play_circle_fill,
-                  size: 48,
-                  color: Colors.white,
-                  shadows: [
-                    Shadow(
-                      color: Colors.black.withOpacity(0.2),
-                      blurRadius: 8,
-                    ),
-                  ],
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Icon(
+                    widget.platform == 'WhatsApp'
+                        ? Icons.chat
+                        : widget.platform == 'Reels'
+                            ? Icons.video_library
+                            : Icons.play_circle_fill,
+                    size: 48,
+                    color: Colors.white,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 20),
+                Text(
+                  'Download ${widget.platform}',
+                  style: GoogleFonts.montserrat(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 1,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
                 Text(
                   'Paste your ${widget.platform} link below:',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Colors.black,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1,
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.5,
                       ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
                 TextField(
                   controller: _controller,
-                  style: const TextStyle(color: Colors.black),
+                  style: const TextStyle(color: Colors.black87, fontSize: 16),
                   cursorColor: Colors.black,
+                  maxLines: 3,
+                  minLines: 1,
                   decoration: InputDecoration(
-                    hintText: 'Enter ${widget.platform} link',
-                    hintStyle: const TextStyle(color: Colors.black45),
+                    hintText: _getPlatformHint(),
+                    hintStyle: const TextStyle(color: Colors.black45, fontSize: 14),
                     filled: true,
-                    fillColor: Colors.white.withOpacity(0.7),
+                    fillColor: Colors.white.withOpacity(0.9),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                       borderSide: const BorderSide(color: Colors.black26, width: 1.5),
@@ -224,24 +388,28 @@ class _DownloadTabState extends State<_DownloadTab> with SingleTickerProviderSta
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(color: Colors.black, width: 2),
+                      borderSide: const BorderSide(color: Color(0xFF185A9D), width: 2),
                     ),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: widget.platform == 'Reels' ? _handleDownload : () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Download not implemented for this tab.')),
-                      );
-                    },
-                    icon: const Icon(Icons.download, color: Color(0xFF185A9D)),
-                    label: const Text(
-                      'Download',
-                      style: TextStyle(
+                    onPressed: _isLoading ? null : (_isPlatformSupported() ? _handleDownload : () {
+                      _showSnackBar('${widget.platform} download is not yet implemented', isError: true);
+                    }),
+                    icon: _isLoading 
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF185A9D)),
+                        )
+                      : const Icon(Icons.download, color: Color(0xFF185A9D)),
+                    label: Text(
+                      _isLoading ? 'Processing...' : 'Download',
+                      style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
                         letterSpacing: 1.1,
@@ -249,17 +417,44 @@ class _DownloadTabState extends State<_DownloadTab> with SingleTickerProviderSta
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
+                      backgroundColor: _isLoading ? Colors.grey.shade300 : Colors.white,
                       foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      padding: const EdgeInsets.symmetric(vertical: 18),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      elevation: 6,
+                      elevation: _isLoading ? 2 : 6,
                       shadowColor: Colors.black.withOpacity(0.15),
                     ),
                   ),
                 ),
+                if (!_isPlatformSupported()) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'This feature is coming soon!',
+                            style: TextStyle(
+                              color: Colors.orange,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
