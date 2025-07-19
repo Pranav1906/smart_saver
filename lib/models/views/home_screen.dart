@@ -126,7 +126,6 @@ class _DownloadTabState extends State<_DownloadTab> with SingleTickerProviderSta
       return;
     }
 
-    // Validate URL based on platform
     String endpoint = '';
     String validationError = "";
     
@@ -135,17 +134,17 @@ class _DownloadTabState extends State<_DownloadTab> with SingleTickerProviderSta
         if (!url.contains("instagram.com") && !url.contains("instagr.am")) {
           validationError = "Please enter a valid Instagram Reels URL";
         }
-        endpoint = 'download/reel';
+        endpoint = 'download/instagram';
         break;
       case 'Shorts':
         if (!url.contains("youtube.com") && !url.contains("youtu.be")) {
           validationError = "Please enter a valid YouTube Shorts URL";
         }
-        endpoint = 'download/shorts';
+        endpoint = 'download/youtube';
         break;
       case 'WhatsApp':
-        endpoint = 'download/whatsapp';
-        break;
+        _showSnackBar('WhatsApp download is not yet implemented', isError: true);
+        return;
       default:
         validationError = "Unknown platform";
     }
@@ -166,16 +165,23 @@ class _DownloadTabState extends State<_DownloadTab> with SingleTickerProviderSta
 
     http.Response? response;
     try {
-      // Show loading indicator
       _showSnackBar("Processing your request... Please wait", isLoading: true);
 
+      final Map<String, dynamic> body = {'url': url};
+      if (widget.platform == 'Shorts') {
+        body['quality'] = 'best';
+        body['type'] = 'video';
+      } else if (widget.platform == 'Reels') {
+        body['quality'] = 'best';
+      }
+
       response = await http.post(
-        Uri.parse('http://10.0.2.2:3000/$endpoint'), // Change to your actual IP for real device
+        Uri.parse('http://10.0.2.2:3000/$endpoint'),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: json.encode({'url': url}),
+        body: json.encode(body),
       ).timeout(const Duration(seconds: 45));
     } on SocketException {
       _showSnackBar('Network error. Check your connection.', isError: true);
@@ -197,31 +203,23 @@ class _DownloadTabState extends State<_DownloadTab> with SingleTickerProviderSta
       return;
     }
 
-    // Now handle the response and file download
     try {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final fileUrl = data['fileUrl'];
 
-        _showSnackBar("Download successful! Opening file...", isSuccess: true);
+        _showSnackBar("Download complete! Opening file...", isSuccess: true);
 
-        // Clear the text field
         _controller.clear();
 
-        // Wait a moment before launching
         await Future.delayed(const Duration(milliseconds: 500));
 
         final tempDir = await getTemporaryDirectory();
         final fileName = fileUrl.split('/').last;
         final filePath = '${tempDir.path}/$fileName';
 
-        // Download the file
         await Dio().download(fileUrl, filePath);
 
-        // Show download complete message
-        _showSnackBar("Download complete! Opening file...", isSuccess: true);
-
-        // Try to open the file, but don't show a network error if it fails
         try {
           await OpenFile.open(filePath);
         } catch (e) {
