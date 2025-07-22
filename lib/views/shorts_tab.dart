@@ -2,99 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:dio/dio.dart';
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'dart:async';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        extendBodyBehindAppBar: true,
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          title: Text(
-            'Smart Saver',
-            style: GoogleFonts.montserrat(
-              fontWeight: FontWeight.w900,
-              fontSize: 28,
-              letterSpacing: 2,
-              color: const Color(0xFF102542),
-              shadows: [
-                Shadow(
-                  color: Colors.black.withOpacity(0.10),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-          ),
-          centerTitle: true,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          flexibleSpace: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF43CEA2), Color(0xFF185A9D)],
-              ),
-            ),
-          ),
-          bottom: const TabBar(
-            indicatorColor: Colors.white,
-            indicatorWeight: 4,
-            labelColor: Colors.black,
-            unselectedLabelColor: Colors.black54,
-            labelStyle: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              letterSpacing: 1,
-            ),
-            tabs: [
-              Tab(text: 'Reels'),
-              Tab(text: 'Shorts'),
-              Tab(text: 'WhatsApp'),
-            ],
-          ),
-        ),
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF43CEA2), Color(0xFF185A9D)],
-            ),
-          ),
-          child: const TabBarView(
-            children: [
-              _DownloadTab(platform: 'Reels'),
-              _DownloadTab(platform: 'Shorts'),
-              _DownloadTab(platform: 'WhatsApp'),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DownloadTab extends StatefulWidget {
-  final String platform;
-  const _DownloadTab({required this.platform});
+class ShortsTab extends StatefulWidget {
+  const ShortsTab({Key? key}) : super(key: key);
 
   @override
-  State<_DownloadTab> createState() => _DownloadTabState();
+  State<ShortsTab> createState() => _ShortsTabState();
 }
 
-class _DownloadTabState extends State<_DownloadTab> with SingleTickerProviderStateMixin {
+class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
@@ -118,125 +41,153 @@ class _DownloadTabState extends State<_DownloadTab> with SingleTickerProviderSta
     super.dispose();
   }
 
+  Future<bool> _requestStoragePermission() async {
+    if (Platform.isAndroid) {
+      if (await _isAndroid11OrAbove()) {
+        var manageStatus = await Permission.manageExternalStorage.status;
+        if (manageStatus != PermissionStatus.granted) {
+          manageStatus = await Permission.manageExternalStorage.request();
+        }
+        return manageStatus == PermissionStatus.granted;
+      } else {
+        var status = await Permission.storage.status;
+        if (status != PermissionStatus.granted) {
+          status = await Permission.storage.request();
+        }
+        return status == PermissionStatus.granted;
+      }
+    }
+    return true;
+  }
+
+  Future<bool> _isAndroid11OrAbove() async {
+    if (Platform.isAndroid) {
+      var androidInfo = await DeviceInfoPlugin().androidInfo;
+      return androidInfo.version.sdkInt >= 30;
+    }
+    return false;
+  }
+
+  Future<String> _getDownloadPath() async {
+    String downloadPath;
+    if (Platform.isAndroid) {
+      if (await _isAndroid11OrAbove()) {
+        try {
+          downloadPath = '/storage/emulated/0/Download/SmartSaver';
+          final testDir = Directory(downloadPath);
+          if (!await testDir.exists()) {
+            await testDir.create(recursive: true);
+          }
+        } catch (e) {
+          final directory = await getExternalStorageDirectory();
+          downloadPath = '${directory!.path}/SmartSaver';
+        }
+      } else {
+        try {
+          downloadPath = '/storage/emulated/0/Download/SmartSaver';
+        } catch (e) {
+          final directory = await getExternalStorageDirectory();
+          downloadPath = '${directory!.path}/SmartSaver';
+        }
+      }
+    } else if (Platform.isIOS) {
+      final directory = await getApplicationDocumentsDirectory();
+      downloadPath = '${directory.path}/SmartSaver';
+    } else {
+      final directory = await getApplicationDocumentsDirectory();
+      downloadPath = '${directory.path}/SmartSaver';
+    }
+    final dir = Directory(downloadPath);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    return downloadPath;
+  }
+
   Future<void> _handleDownload() async {
     final url = _controller.text.trim();
-
     if (url.isEmpty) {
       _showSnackBar("Please enter a valid URL");
       return;
     }
-
-    // Validate URL based on platform
-    String endpoint = '';
-    String validationError = "";
-    
-    switch (widget.platform) {
-      case 'Reels':
-        if (!url.contains("instagram.com") && !url.contains("instagr.am")) {
-          validationError = "Please enter a valid Instagram Reels URL";
-        }
-        endpoint = 'download/reel';
-        break;
-      case 'Shorts':
-        if (!url.contains("youtube.com") && !url.contains("youtu.be")) {
-          validationError = "Please enter a valid YouTube Shorts URL";
-        }
-        endpoint = 'download/shorts';
-        break;
-      case 'WhatsApp':
-        endpoint = 'download/whatsapp';
-        break;
-      default:
-        validationError = "Unknown platform";
-    }
-
-    if (endpoint.isEmpty) {
-      _showSnackBar("Unknown platform", isError: true);
+    if (!url.contains("youtube.com") && !url.contains("youtu.be")) {
+      _showSnackBar("Please enter a valid YouTube Shorts URL", isError: true);
       return;
     }
 
-    if (validationError.isNotEmpty) {
-      _showSnackBar(validationError, isError: true);
+    final hasPermission = await _requestStoragePermission();
+    if (!hasPermission) {
+      _showSnackBar('Storage permission is required to save files', isError: true);
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
+    _showSnackBar("Processing your request... Please wait", isLoading: true);
 
     http.Response? response;
     try {
-      // Show loading indicator
-      _showSnackBar("Processing your request... Please wait", isLoading: true);
-
       response = await http.post(
-        Uri.parse('http://10.0.2.2:3000/$endpoint'), // Change to your actual IP for real device
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: json.encode({'url': url}),
+        Uri.parse('http://10.0.2.2:3000/download/youtube'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'url': url, 'quality': 'best', 'type': 'video'}),
       ).timeout(const Duration(seconds: 45));
     } on SocketException {
       _showSnackBar('Network error. Check your connection.', isError: true);
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
       return;
     } on TimeoutException {
       _showSnackBar('Request timed out. Please try again.', isError: true);
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
       return;
     } catch (e) {
       _showSnackBar('Error: ${e.toString()}', isError: true);
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
       return;
     }
 
-    // Now handle the response and file download
     try {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final fileUrl = data['fileUrl'];
+        final originalFileName = data['filename'] ?? fileUrl.split('/').last;
 
-        _showSnackBar("Download successful! Opening file...", isSuccess: true);
-
-        // Clear the text field
+        _showSnackBar("Download complete! Saving to device...", isSuccess: true);
         _controller.clear();
 
-        // Wait a moment before launching
         await Future.delayed(const Duration(milliseconds: 500));
-
-        final tempDir = await getTemporaryDirectory();
-        final fileName = fileUrl.split('/').last;
-        final filePath = '${tempDir.path}/$fileName';
-
-        // Download the file
-        await Dio().download(fileUrl, filePath);
-
-        // Show download complete message
-        _showSnackBar("Download complete! Opening file...", isSuccess: true);
-
-        // Try to open the file, but don't show a network error if it fails
         try {
-          await OpenFile.open(filePath);
+          final correctedFileUrl = fileUrl.replaceAll('localhost:3000', '10.0.2.2:3000');
+          final tempDir = await getTemporaryDirectory();
+          final tempFilePath = '${tempDir.path}/$originalFileName';
+          final downloadPath = await _getDownloadPath();
+          final permanentFilePath = '$downloadPath/$originalFileName';
+
+          _showSnackBar("Downloading file...", isLoading: true);
+          await Dio().download(correctedFileUrl, tempFilePath);
+
+          final tempFile = File(tempFilePath);
+          await tempFile.copy(permanentFilePath);
+
+          _showSnackBar("File saved to Downloads/SmartSaver folder", isSuccess: true);
+
+          try {
+            await OpenFile.open(tempFilePath);
+          } catch (e) {
+            _showSnackBar("File saved to: Downloads/SmartSaver/$originalFileName", isSuccess: true);
+          }
+        } on SocketException {
+          _showSnackBar('Network error. Check your connection.', isError: true);
+        } on TimeoutException {
+          _showSnackBar('Request timed out. Please try again.', isError: true);
         } catch (e) {
-          _showSnackBar("File downloaded, but could not be opened.", isError: true);
+          _showSnackBar('Download failed: ${e.toString()}', isError: true);
         }
       } else {
         final err = json.decode(response.body);
         _showSnackBar('Failed: ${err['error'] ?? 'Unknown error'}', isError: true);
       }
-    } catch (e) {
-      _showSnackBar('Download failed: ${e.toString()}', isError: true);
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
     }
   }
 
@@ -246,7 +197,7 @@ class _DownloadTabState extends State<_DownloadTab> with SingleTickerProviderSta
       SnackBar(
         content: Row(
           children: [
-            if (isLoading) 
+            if (isLoading)
               const SizedBox(
                 width: 16,
                 height: 16,
@@ -267,11 +218,11 @@ class _DownloadTabState extends State<_DownloadTab> with SingleTickerProviderSta
             ),
           ],
         ),
-        backgroundColor: isError 
-          ? Colors.red.shade600 
-          : isSuccess 
-            ? Colors.green.shade600 
-            : Colors.blue.shade600,
+        backgroundColor: isError
+            ? Colors.red.shade600
+            : isSuccess
+                ? Colors.green.shade600
+                : Colors.blue.shade600,
         duration: Duration(seconds: isLoading ? 10 : 4),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
@@ -282,22 +233,7 @@ class _DownloadTabState extends State<_DownloadTab> with SingleTickerProviderSta
     );
   }
 
-  String _getPlatformHint() {
-    switch (widget.platform) {
-      case 'Reels':
-        return 'e.g., https://instagram.com/reel/...';
-      case 'Shorts':
-        return 'e.g., https://youtube.com/shorts/...';
-      case 'WhatsApp':
-        return 'WhatsApp status download';
-      default:
-        return 'Enter link here';
-    }
-  }
-
-  bool _isPlatformSupported() {
-    return widget.platform != 'WhatsApp'; // WhatsApp is not fully implemented
-  }
+  String _getPlatformHint() => 'e.g., https://youtube.com/shorts/...';
 
   @override
   Widget build(BuildContext context) {
@@ -330,11 +266,7 @@ class _DownloadTabState extends State<_DownloadTab> with SingleTickerProviderSta
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Icon(
-                    widget.platform == 'WhatsApp'
-                        ? Icons.chat
-                        : widget.platform == 'Reels'
-                            ? Icons.video_library
-                            : Icons.play_circle_fill,
+                    Icons.play_circle_fill,
                     size: 48,
                     color: Colors.white,
                     shadows: [
@@ -347,7 +279,7 @@ class _DownloadTabState extends State<_DownloadTab> with SingleTickerProviderSta
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  'Download ${widget.platform}',
+                  'Download Shorts',
                   style: GoogleFonts.montserrat(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -358,7 +290,7 @@ class _DownloadTabState extends State<_DownloadTab> with SingleTickerProviderSta
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Paste your ${widget.platform} link below:',
+                  'Paste your YouTube Shorts link below:',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: Colors.white70,
                         fontWeight: FontWeight.w500,
@@ -397,18 +329,16 @@ class _DownloadTabState extends State<_DownloadTab> with SingleTickerProviderSta
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: _isLoading ? null : (_isPlatformSupported() ? _handleDownload : () {
-                      _showSnackBar('${widget.platform} download is not yet implemented', isError: true);
-                    }),
-                    icon: _isLoading 
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF185A9D)),
-                        )
-                      : const Icon(Icons.download, color: Color(0xFF185A9D)),
+                    onPressed: _isLoading ? null : _handleDownload,
+                    icon: _isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF185A9D)),
+                          )
+                        : const Icon(Icons.download, color: Color(0xFF185A9D)),
                     label: Text(
-                      _isLoading ? 'Processing...' : 'Download',
+                      _isLoading ? 'Processing...' : 'Download & Save',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
@@ -428,33 +358,33 @@ class _DownloadTabState extends State<_DownloadTab> with SingleTickerProviderSta
                     ),
                   ),
                 ),
-                if (!_isPlatformSupported()) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.orange.withOpacity(0.3)),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.info_outline, color: Colors.orange, size: 20),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'This feature is coming soon!',
-                            style: TextStyle(
-                              color: Colors.orange,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline, color: Colors.lightBlue, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          Platform.isAndroid
+                              ? 'Files will be saved to Downloads/SmartSaver folder'
+                              : 'Files will be saved to app documents',
+                          style: const TextStyle(
+                            color: Colors.lightBlue,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ],
             ),
           ),
