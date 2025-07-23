@@ -4,9 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
-import 'dart:typed_data';
 import 'package:video_player/video_player.dart';
-import 'package:device_info_plus/device_info_plus.dart';
 
 class WhatsAppTab extends StatefulWidget {
   const WhatsAppTab({Key? key}) : super(key: key);
@@ -32,27 +30,14 @@ class _WhatsAppTabState extends State<WhatsAppTab> {
       _error = null;
     });
     try {
-      final androidInfo = await DeviceInfoPlugin().androidInfo;
-      bool granted = false;
-      if (Platform.isAndroid && androidInfo.version.sdkInt >= 33) {
-        // Android 13+ (API 33+)
-        var images = await Permission.photos.request();
-        var videos = await Permission.videos.request();
-        granted = images.isGranted && videos.isGranted;
-      } else {
-        // Android 12 and below
-        var storage = await Permission.storage.request();
-        granted = storage.isGranted;
-      }
-      if (!granted) {
+      if (!await Permission.videos.request().isGranted ||
+          !await Permission.photos.request().isGranted) {
         setState(() {
-          _error = 'Storage/media permission denied';
+          _error = 'Storage permission denied';
           _loading = false;
         });
         return;
       }
-
-      // 2. Locate .Statuses folder
       const legacy = '/storage/emulated/0/WhatsApp/Media/.Statuses';
       const scoped = '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/.Statuses';
       Directory statusDir = Directory(legacy);
@@ -64,8 +49,6 @@ class _WhatsAppTabState extends State<WhatsAppTab> {
         });
         return;
       }
-
-      // 3. List files (no need to copy yet)
       final files = statusDir
           .listSync()
           .where((f) =>
@@ -73,7 +56,6 @@ class _WhatsAppTabState extends State<WhatsAppTab> {
               (f.path.endsWith('.mp4') || f.path.endsWith('.jpg')))
           .map((f) => File(f.path))
           .toList();
-
       setState(() {
         _statuses = files;
         _loading = false;
@@ -99,72 +81,100 @@ class _WhatsAppTabState extends State<WhatsAppTab> {
 
   @override
   Widget build(BuildContext context) {
-    print('Statuses: $_statuses, Loading: $_loading, Error: $_error');
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('WhatsApp Statuses'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _fetchStatuses,
-          ),
-        ],
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF43CEA2), Color(0xFF185A9D)],
+        ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(child: Text(_error!, style: const TextStyle(color: Colors.red)))
-              : _statuses.isEmpty
-                  ? const Center(child: Text('No statuses found. View some in WhatsApp first!'))
-                  : GridView.builder(
-                      padding: const EdgeInsets.all(12),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3, crossAxisSpacing: 8, mainAxisSpacing: 8,
-                      ),
-                      itemCount: _statuses.length,
-                      itemBuilder: (context, i) {
-                        final file = _statuses[i];
-                        final isVideo = file.path.endsWith('.mp4');
-                        return GestureDetector(
-                          onTap: () async {
-                            await showDialog(
-                              context: context,
-                              builder: (_) => Dialog(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    isVideo
-                                        ? SizedBox(
-                                            height: 300,
-                                            child: VideoPreview(file: file),
-                                          )
-                                        : Image.file(file, fit: BoxFit.contain),
-                                    const SizedBox(height: 12),
-                                    ElevatedButton.icon(
-                                      icon: const Icon(Icons.save_alt),
-                                      label: const Text('Save to Gallery'),
-                                      onPressed: () async {
-                                        await _saveToGallery(file);
-                                        Navigator.pop(context);
-                                      },
-                                    ),
-                                  ],
-                                ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+              child: Row(
+                children: [
+                  Text(
+                    'WhatsApp Statuses',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                          letterSpacing: 1,
+                        ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.refresh, color: Color(0xFF185A9D)),
+                    onPressed: _fetchStatuses,
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? Center(child: Text(_error!, style: const TextStyle(color: Colors.red)))
+                      : _statuses.isEmpty
+                          ? const Center(child: Text('No statuses found. View some in WhatsApp first!'))
+                          : GridView.builder(
+                              padding: const EdgeInsets.all(12),
+                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 3, crossAxisSpacing: 8, mainAxisSpacing: 8,
                               ),
-                            );
-                          },
-                          child: isVideo
-                              ? Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    Container(color: Colors.black12),
-                                    const Icon(Icons.videocam, color: Colors.white70, size: 40),
-                                  ],
-                                )
-                              : Image.file(file, fit: BoxFit.cover),
-                        );
-                      },
-                    ),
+                              itemCount: _statuses.length,
+                              itemBuilder: (context, i) {
+                                final file = _statuses[i];
+                                final isVideo = file.path.endsWith('.mp4');
+                                return GestureDetector(
+                                  onTap: () async {
+                                    await showDialog(
+                                      context: context,
+                                      builder: (_) => Dialog(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            isVideo
+                                                ? SizedBox(
+                                                    height: 300,
+                                                    child: VideoPreview(file: file),
+                                                  )
+                                                : Image.file(file, fit: BoxFit.contain),
+                                            const SizedBox(height: 12),
+                                            ElevatedButton.icon(
+                                              icon: const Icon(Icons.save_alt),
+                                              label: const Text('Save to Gallery'),
+                                              onPressed: () async {
+                                                await _saveToGallery(file);
+                                                Navigator.pop(context);
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  child: isVideo
+                                      ? Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            Container(color: Colors.black12),
+                                            const Icon(Icons.videocam, color: Colors.white70, size: 40),
+                                          ],
+                                        )
+                                      : ClipRRect(
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: Image.file(file, fit: BoxFit.cover),
+                                        ),
+                                );
+                              },
+                            ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
