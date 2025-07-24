@@ -9,6 +9,8 @@ import 'dart:io';
 import 'dart:async';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import '../controllers/share_controller.dart';
+import 'package:video_player/video_player.dart';
 
 class ShortsTab extends StatefulWidget {
   const ShortsTab({Key? key}) : super(key: key);
@@ -169,6 +171,12 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
           await tempFile.copy(permanentFilePath);
 
           _showSnackBar("File saved to Downloads/SmartSaver folder", isSuccess: true);
+
+          // After saving the file in _handleDownload, show a dialog to preview and share
+          await showDialog(
+            context: context,
+            builder: (_) => MediaPreviewDialog(file: File(permanentFilePath)),
+          );
 
           try {
             await OpenFile.open(tempFilePath);
@@ -388,6 +396,111 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class OpenFileWidget extends StatelessWidget {
+  final File file;
+  const OpenFileWidget({required this.file, Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    // For now, just show an icon and filename
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.video_library, size: 80, color: Colors.grey),
+        const SizedBox(height: 8),
+        Text(file.path.split('/').last, style: const TextStyle(fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+}
+
+class MediaPreviewDialog extends StatefulWidget {
+  final File file;
+  const MediaPreviewDialog({required this.file, Key? key}) : super(key: key);
+
+  @override
+  State<MediaPreviewDialog> createState() => _MediaPreviewDialogState();
+}
+
+class _MediaPreviewDialogState extends State<MediaPreviewDialog> {
+  VideoPlayerController? _controller;
+  bool get isVideo => widget.file.path.toLowerCase().endsWith('.mp4');
+
+  @override
+  void initState() {
+    super.initState();
+    if (isVideo) {
+      _controller = VideoPlayerController.file(widget.file)
+        ..initialize().then((_) => setState(() {}));
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      backgroundColor: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: isVideo
+                  ? (_controller?.value.isInitialized ?? false)
+                      ? AspectRatio(
+                          aspectRatio: _controller!.value.aspectRatio,
+                          child: VideoPlayer(_controller!),
+                        )
+                      : const SizedBox(
+                          height: 200,
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                  : Icon(Icons.videocam, size: 120, color: Colors.grey[400]),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              widget.file.path.split('/').last,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.share),
+                label: const Text('Share'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFF185A9D),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                onPressed: () async {
+                  await ShareController.shareFile(widget.file.path);
+                  Navigator.pop(context);
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
