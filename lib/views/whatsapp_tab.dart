@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:video_player/video_player.dart';
+import '../controllers/share_controller.dart';
 
 class WhatsAppTab extends StatefulWidget {
   const WhatsAppTab({Key? key}) : super(key: key);
@@ -132,37 +133,18 @@ class _WhatsAppTabState extends State<WhatsAppTab> {
                                   onTap: () async {
                                     await showDialog(
                                       context: context,
-                                      builder: (_) => Dialog(
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            isVideo
-                                                ? SizedBox(
-                                                    height: 300,
-                                                    child: VideoPreview(file: file),
-                                                  )
-                                                : Image.file(file, fit: BoxFit.contain),
-                                            const SizedBox(height: 12),
-                                            ElevatedButton.icon(
-                                              icon: const Icon(Icons.save_alt),
-                                              label: const Text('Save to Gallery'),
-                                              onPressed: () async {
-                                                await _saveToGallery(file);
-                                                Navigator.pop(context);
-                                              },
-                                            ),
-                                          ],
-                                        ),
-                                      ),
+                                      builder: (_) => MediaPreviewDialog(file: file),
                                     );
                                   },
                                   child: isVideo
-                                      ? Stack(
-                                          fit: StackFit.expand,
-                                          children: [
-                                            Container(color: Colors.black12),
-                                            const Icon(Icons.videocam, color: Colors.white70, size: 40),
-                                          ],
+                                      ? ClipRRect(
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: Container(
+                                            color: Colors.black12,
+                                            child: const Center(
+                                              child: Icon(Icons.videocam, color: Colors.white70, size: 40),
+                                            ),
+                                          ),
                                         )
                                       : ClipRRect(
                                           borderRadius: BorderRadius.circular(12),
@@ -179,40 +161,89 @@ class _WhatsAppTabState extends State<WhatsAppTab> {
   }
 }
 
-class VideoPreview extends StatefulWidget {
+class MediaPreviewDialog extends StatefulWidget {
   final File file;
-  const VideoPreview({required this.file, Key? key}) : super(key: key);
+  const MediaPreviewDialog({required this.file, Key? key}) : super(key: key);
 
   @override
-  State<VideoPreview> createState() => _VideoPreviewState();
+  State<MediaPreviewDialog> createState() => _MediaPreviewDialogState();
 }
 
-class _VideoPreviewState extends State<VideoPreview> {
-  late VideoPlayerController _controller;
+class _MediaPreviewDialogState extends State<MediaPreviewDialog> {
+  VideoPlayerController? _controller;
+  bool get isVideo => widget.file.path.toLowerCase().endsWith('.mp4');
 
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.file(widget.file)
-      ..initialize().then((_) {
-        setState(() {});
-        _controller.play();
-      });
+    if (isVideo) {
+      _controller = VideoPlayerController.file(widget.file)
+        ..initialize().then((_) => setState(() {}));
+    }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return _controller.value.isInitialized
-        ? AspectRatio(
-            aspectRatio: _controller.value.aspectRatio,
-            child: VideoPlayer(_controller),
-          )
-        : const Center(child: CircularProgressIndicator());
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      backgroundColor: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: isVideo
+                  ? (_controller?.value.isInitialized ?? false)
+                      ? AspectRatio(
+                          aspectRatio: _controller!.value.aspectRatio,
+                          child: VideoPlayer(_controller!),
+                        )
+                      : const SizedBox(
+                          height: 200,
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                  : Image.file(widget.file, height: 200, fit: BoxFit.contain),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              widget.file.path.split('/').last,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.share),
+                label: const Text('Share'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFF185A9D),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                onPressed: () async {
+                  await ShareController.shareFile(widget.file.path);
+                  Navigator.pop(context);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
