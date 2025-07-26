@@ -11,6 +11,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import '../controllers/share_controller.dart';
 import 'package:video_player/video_player.dart';
+import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 
 class ShortsTab extends StatefulWidget {
   const ShortsTab({Key? key}) : super(key: key);
@@ -482,22 +483,55 @@ class _MediaPreviewDialogState extends State<MediaPreviewDialog> {
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.share),
-                label: const Text('Share'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFF185A9D),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.save_alt),
+                      label: const Text('Save to Gallery'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Color(0xFF43CEA2),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      onPressed: () async {
+                        final result = await ImageGallerySaverPlus.saveFile(widget.file.path);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(result['isSuccess'] == true
+                                ? 'Saved to gallery!'
+                                : 'Failed to save.'),
+                          ),
+                        );
+                        Navigator.pop(context);
+                      },
+                    ),
                   ),
-                  textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                onPressed: () async {
-                  await ShareController.shareFile(widget.file.path);
-                  Navigator.pop(context);
-                },
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.share),
+                      label: const Text('Share'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Color(0xFF185A9D),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      onPressed: () async {
+                        await ShareController.shareFile(widget.file.path);
+                        Navigator.pop(context);
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
