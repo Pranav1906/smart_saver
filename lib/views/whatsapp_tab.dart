@@ -122,9 +122,9 @@ class _WhatsAppTabState extends State<WhatsAppTab> {
                           ? const Center(child: Text('No statuses found. View some in WhatsApp first!'))
                           : GridView.builder(
                               padding: const EdgeInsets.all(12),
-                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 3, crossAxisSpacing: 8, mainAxisSpacing: 8,
-                              ),
+                                                             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                 crossAxisCount: 3, crossAxisSpacing: 16, mainAxisSpacing: 16,
+                               ),
                               itemCount: _statuses.length,
                               itemBuilder: (context, i) {
                                 final file = _statuses[i];
