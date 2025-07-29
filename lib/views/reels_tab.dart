@@ -12,6 +12,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import '../controllers/share_controller.dart';
 import 'package:video_player/video_player.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
+import '../config/api_config.dart';
 
 class ReelsTab extends StatefulWidget {
   const ReelsTab({Key? key}) : super(key: key);
@@ -130,7 +131,7 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
     http.Response? response;
     try {
       response = await http.post(
-        Uri.parse('http://10.0.2.2:3000/download/instagram'),
+        Uri.parse(ApiConfig.downloadInstagram),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'url': url, 'quality': 'best'}),
       ).timeout(const Duration(seconds: 45));
@@ -159,7 +160,8 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
 
         await Future.delayed(const Duration(milliseconds: 500));
         try {
-          final correctedFileUrl = fileUrl.replaceAll('localhost:3000', '10.0.2.2:3000');
+          // Use the Railway domain for file downloads
+          final correctedFileUrl = fileUrl.replaceAll('localhost:3000', 'smartsaver-production.up.railway.app');
           final tempDir = await getTemporaryDirectory();
           final tempFilePath = '${tempDir.path}/$originalFileName';
           final downloadPath = await _getDownloadPath();
