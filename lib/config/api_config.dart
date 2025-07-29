@@ -4,7 +4,10 @@ class ApiConfig {
   
   // Production URL (replace with your Railway URL after deployment)
   // Example: https://smart-saver-backend.up.railway.app
-  static const String prodBaseUrl = 'https://your-railway-app-name.up.railway.app';
+  // Get this URL from your Railway dashboard after deployment
+  // Your app is running on port 8080, so the URL will be like:
+  // https://your-app-name.up.railway.app
+  static const String prodBaseUrl = 'https://your-app-name.up.railway.app';
   
   // Current environment - change this to 'production' after deployment
   static const String environment = 'development';
@@ -26,10 +29,22 @@ class ApiConfig {
 }
 
 /*
-DEPLOYMENT INSTRUCTIONS:
-1. Deploy backend to Railway (see README.md in smart-saver-backend folder)
-2. Get your Railway URL from the dashboard
-3. Replace 'your-railway-app-name.up.railway.app' with your actual Railway URL
+RAILWAY DEPLOYMENT STATUS:
+✅ Server deployed successfully on Railway
+✅ Running on port 8080
+✅ Health endpoint working
+❌ yt-dlp installation needs fix (updated code provided)
+
+NEXT STEPS:
+1. Redeploy with updated yt-dlp installation code
+2. Get your Railway URL from dashboard
+3. Replace 'your-app-name.up.railway.app' with your actual Railway URL
 4. Change environment from 'development' to 'production'
-5. Rebuild and deploy your Flutter app
+5. Test the complete setup
+
+CURRENT RAILWAY URL FORMAT:
+https://your-app-name.up.railway.app
+
+TEST HEALTH ENDPOINT:
+https://your-app-name.up.railway.app/health
 */

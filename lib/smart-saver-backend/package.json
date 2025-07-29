@@ -5,7 +5,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "postinstall": "node -e \"const {execSync} = require('child_process'); try { execSync('curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /tmp/yt-dlp && chmod +x /tmp/yt-dlp && mv /tmp/yt-dlp /usr/local/bin/yt-dlp', {stdio: 'inherit'}); console.log('yt-dlp installed successfully'); } catch(e) { console.log('yt-dlp installation failed, will retry at runtime'); }\""
   },
   "keywords": ["video-downloader", "instagram", "youtube", "api"],
   "author": "Smart Saver Team",
