@@ -2,15 +2,11 @@ class ApiConfig {
   // Development URL (for Android emulator)
   static const String devBaseUrl = 'http://10.0.2.2:3000';
   
-  // Production URL (replace with your Railway URL after deployment)
-  // Example: https://smart-saver-backend.up.railway.app
-  // Get this URL from your Railway dashboard after deployment
-  // Your app is running on port 8080, so the URL will be like:
-  // https://your-app-name.up.railway.app
-  static const String prodBaseUrl = 'https://your-app-name.up.railway.app';
+  // Production URL (set to your deployed Railway domain)
+  static const String prodBaseUrl = 'https://smartsaver-production.up.railway.app';
   
-  // Current environment - change this to 'production' after deployment
-  static const String environment = 'development';
+  // Set environment to 'production' for live deployment
+  static const String environment = 'production';
   
   // Get the current base URL based on environment
   static String get baseUrl {
@@ -29,22 +25,8 @@ class ApiConfig {
 }
 
 /*
-RAILWAY DEPLOYMENT STATUS:
-✅ Server deployed successfully on Railway
-✅ Running on port 8080
-✅ Health endpoint working
-❌ yt-dlp installation needs fix (updated code provided)
+Production API is now set to:
+https://smartsaver-production.up.railway.app
 
-NEXT STEPS:
-1. Redeploy with updated yt-dlp installation code
-2. Get your Railway URL from dashboard
-3. Replace 'your-app-name.up.railway.app' with your actual Railway URL
-4. Change environment from 'development' to 'production'
-5. Test the complete setup
-
-CURRENT RAILWAY URL FORMAT:
-https://your-app-name.up.railway.app
-
-TEST HEALTH ENDPOINT:
-https://your-app-name.up.railway.app/health
+To switch back to development, change 'environment' to 'development'.
 */
