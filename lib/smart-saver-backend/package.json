@@ -5,8 +5,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
-    "dev": "nodemon server.js",
-    "postinstall": "npm install -g yt-dlp || echo 'yt-dlp installation failed, please install manually'"
+    "dev": "nodemon server.js"
   },
   "keywords": ["video-downloader", "instagram", "youtube", "api"],
   "author": "Smart Saver Team",
