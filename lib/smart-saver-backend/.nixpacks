@@ -1,0 +1,19 @@
+# Node.js runtime
+providers:
+  - nodejs
+
+# System packages
+packages:
+  - yt-dlp
+  - python3
+  - ffmpeg
+
+# Build commands
+phases:
+  install:
+    - npm install
+  build:
+    - echo "Build completed"
+
+# Start command
+start: npm start 
