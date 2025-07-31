@@ -118,6 +118,12 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
       _showSnackBar("Please enter a valid Instagram Reels URL", isError: true);
       return;
     }
+    
+    // Check if it's likely a reel URL (contains /reel/ or /p/)
+    if (!url.contains("/reel/") && !url.contains("/p/")) {
+      _showSnackBar("Please enter a valid Instagram Reels or post URL", isError: true);
+      return;
+    }
 
     final hasPermission = await _requestStoragePermission();
     if (!hasPermission) {
@@ -195,7 +201,18 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
         }
       } else {
         final err = json.decode(response.body);
-        _showSnackBar('Failed: ${err['error'] ?? 'Unknown error'}', isError: true);
+        final errorMessage = err['error'] ?? 'Unknown error';
+        
+        // Handle specific error cases with better user messages
+        if (errorMessage.contains('does not contain a video')) {
+          _showSnackBar('This post has no video. Try with a reel or video post.', isError: true);
+        } else if (errorMessage.contains('unavailable') || errorMessage.contains('private')) {
+          _showSnackBar('Video is private or unavailable. Try with a public post.', isError: true);
+        } else if (errorMessage.contains('authentication') || errorMessage.contains('Sign in')) {
+          _showSnackBar('This post is private. Try with a public Instagram post.', isError: true);
+        } else {
+          _showSnackBar('Failed: $errorMessage', isError: true);
+        }
       }
     } finally {
       setState(() => _isLoading = false);
@@ -244,7 +261,7 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
     );
   }
 
-  String _getPlatformHint() => 'e.g., https://instagram.com/reel/...';
+  String _getPlatformHint() => 'e.g., https://instagram.com/reel/... or https://instagram.com/p/...';
 
   @override
   Widget build(BuildContext context) {
@@ -377,20 +394,35 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.blue.withOpacity(0.3)),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.info_outline, color: Colors.lightBlue, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          Platform.isAndroid
-                              ? 'Files will be saved to Downloads/SmartSaver folder'
-                              : 'Files will be saved to app documents',
-                          style: const TextStyle(
-                            color: Colors.lightBlue,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
+                      Row(
+                        children: [
+                          const Icon(Icons.info_outline, color: Colors.lightBlue, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Download Info',
+                              style: const TextStyle(
+                                color: Colors.lightBlue,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '• Only video content (reels, posts with videos) can be downloaded\n'
+                        '• Image-only posts cannot be downloaded\n'
+                        '• Private posts require authentication\n'
+                        '• Files saved to: ${Platform.isAndroid ? 'Downloads/SmartSaver' : 'app documents'}',
+                        style: const TextStyle(
+                          color: Colors.lightBlue,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
