@@ -210,6 +210,8 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
           _showSnackBar('Video is private or unavailable. Try with a public post.', isError: true);
         } else if (errorMessage.contains('authentication') || errorMessage.contains('Sign in')) {
           _showSnackBar('This post is private. Try with a public Instagram post.', isError: true);
+        } else if (errorMessage.contains('temporarily blocking') || errorMessage.contains('rate limit') || errorMessage.contains('try again later')) {
+          _showSnackBar('Instagram is blocking downloads. Try again in a few minutes.', isError: true);
         } else {
           _showSnackBar('Failed: $errorMessage', isError: true);
         }
