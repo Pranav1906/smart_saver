@@ -5,6 +5,7 @@
   "scripts": {
     "test": "node test_youtube.js",
     "test-diff": "node test_different_video.js",
+    "test-version": "node test_ytdlp_version.js",
     "start": "node server.js",
     "dev": "nodemon server.js"
   },

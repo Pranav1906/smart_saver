@@ -13,7 +13,10 @@ RUN apk add --no-cache \
 # Create virtual environment and install yt-dlp
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --upgrade pip && pip install yt-dlp
+RUN pip install --upgrade pip && pip install --upgrade yt-dlp
+
+# Update yt-dlp to latest version
+RUN /opt/venv/bin/yt-dlp -U
 
 # Create app directory
 WORKDIR /app

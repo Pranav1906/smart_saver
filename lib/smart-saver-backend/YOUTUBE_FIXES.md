@@ -21,6 +21,8 @@ YouTube was requiring authentication ("Sign in to confirm you're not a bot") whe
 - **Secondary**: Best quality without height limit with Android client
 - **Tertiary**: Mobile user agent with worst quality (for compatibility)
 - **Quaternary**: Web client with no format selection (automatic best)
+- **Quinary**: Linux user agent with specific format selection (720p max)
+- **Senary**: Default yt-dlp behavior with minimal options
 
 ### 3. Better Error Handling
 - Specific error messages for authentication issues
@@ -31,6 +33,12 @@ YouTube was requiring authentication ("Sign in to confirm you're not a bot") whe
 - Updated Dockerfile to use Python virtual environment for yt-dlp installation
 - Fixed Alpine Linux PEP 668 compatibility issues
 - Added additional system dependencies
+- Auto-updates yt-dlp to latest version during build
+
+### 5. Enhanced Error Detection
+- Added detection for "Failed to extract any player response" errors
+- Better error messages for YouTube API changes
+- Version checking in health endpoint
 
 ## Testing
 
@@ -44,6 +52,9 @@ BASE_URL=http://localhost:8080 TEST_URL=https://www.youtube.com/shorts/x1c9Z6JN4
 
 # Test with a different video that should work
 BASE_URL=http://localhost:8080 npm run test-diff
+
+# Test with regular YouTube video (not shorts)
+BASE_URL=http://localhost:8080 npm run test-version
 
 # Or test the endpoints manually
 curl -X POST http://localhost:8080/test/youtube \
