@@ -10,6 +10,7 @@ import 'dart:async';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import '../controllers/share_controller.dart';
+import '../widgets/interstitial_ad_manager.dart';
 import 'package:video_player/video_player.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import '../config/api_config.dart';
@@ -164,6 +165,10 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
         _showSnackBar("Download complete! Saving to device...", isSuccess: true);
         _controller.clear();
 
+        // Show interstitial ad after successful download
+        await Future.delayed(const Duration(milliseconds: 1000));
+        await InterstitialAdManager.showInterstitialAd();
+
         await Future.delayed(const Duration(milliseconds: 500));
         try {
           // Use the Railway domain for file downloads
@@ -271,9 +276,10 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
       opacity: _fadeAnim,
       child: Center(
         child: SingleChildScrollView(
+          // padding: const EdgeInsets.only(bottom: 80), // Add bottom padding for banner ad
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            margin: const EdgeInsets.only(left: 16, right: 16, top: 100),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.10),
               borderRadius: BorderRadius.circular(24),

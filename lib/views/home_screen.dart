@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../widgets/banner_ad_widget.dart';
 import 'reels_tab.dart';
 import 'shorts_tab.dart';
 import 'whatsapp_tab.dart';
@@ -60,21 +61,32 @@ class HomeScreen extends StatelessWidget {
             ],
           ),
         ),
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF43CEA2), Color(0xFF185A9D)],
+        body: Column(
+          children: [
+            Expanded(
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF43CEA2), Color(0xFF185A9D)],
+                  ),
+                ),
+                child: const TabBarView(
+                  children: [
+                    ReelsTab(),
+                    ShortsTab(),
+                    WhatsAppTab(),
+                  ],
+                ),
+              ),
             ),
-          ),
-          child: const TabBarView(
-            children: [
-              ReelsTab(),
-              ShortsTab(),
-              WhatsAppTab(),
-            ],
-          ),
+            // Banner Ad at the bottom
+            const BannerAdWidget(
+              margin: EdgeInsets.only(bottom: 8),
+              showBorder: false,
+            ),
+          ],
         ),
       ),
     );

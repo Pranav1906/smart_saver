@@ -46,6 +46,8 @@ dependencies:
   video_player: ^2.7.0
   video_thumbnail: ^0.5.3
   share_plus: ^7.2.1
+  google_mobile_ads: ^4.0.0
+
 
 dev_dependencies:
   flutter_test:
