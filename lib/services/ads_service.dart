@@ -1,4 +1,5 @@
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'dart:async';
 
 class AdsService {
   // Test Ad Unit IDs - Replace with your actual ad unit IDs for production
@@ -45,21 +46,24 @@ class AdsService {
   // Create an interstitial ad
   static Future<InterstitialAd?> createInterstitialAd() async {
     try {
-      InterstitialAd? interstitialAd;
+      Completer<InterstitialAd?> completer = Completer<InterstitialAd?>();
+      
       await InterstitialAd.load(
         adUnitId: interstitialAdUnitId,
         request: const AdRequest(),
         adLoadCallback: InterstitialAdLoadCallback(
           onAdLoaded: (ad) {
-            interstitialAd = ad;
             print('Interstitial ad loaded successfully');
+            completer.complete(ad);
           },
           onAdFailedToLoad: (error) {
             print('Interstitial ad failed to load: $error');
+            completer.complete(null);
           },
         ),
       );
-      return interstitialAd;
+      
+      return await completer.future;
     } catch (e) {
       print('Error creating interstitial ad: $e');
       return null;
@@ -69,21 +73,24 @@ class AdsService {
   // Create a rewarded ad
   static Future<RewardedAd?> createRewardedAd() async {
     try {
-      RewardedAd? rewardedAd;
+      Completer<RewardedAd?> completer = Completer<RewardedAd?>();
+      
       await RewardedAd.load(
         adUnitId: rewardedAdUnitId,
         request: const AdRequest(),
         rewardedAdLoadCallback: RewardedAdLoadCallback(
           onAdLoaded: (ad) {
-            rewardedAd = ad;
             print('Rewarded ad loaded successfully');
+            completer.complete(ad);
           },
           onAdFailedToLoad: (error) {
             print('Rewarded ad failed to load: $error');
+            completer.complete(null);
           },
         ),
       );
-      return rewardedAd;
+      
+      return await completer.future;
     } catch (e) {
       print('Error creating rewarded ad: $e');
       return null;
