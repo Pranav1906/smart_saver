@@ -21,6 +21,11 @@ YouTube was requiring authentication ("Sign in to confirm you're not a bot") whe
 - Clear suggestions for users when videos are age-restricted
 - Proper HTTP status codes (400 for client errors, 500 for server errors)
 
+### 4. Updated Dependencies
+- Updated Dockerfile to use Python virtual environment for yt-dlp installation
+- Fixed Alpine Linux PEP 668 compatibility issues
+- Added additional system dependencies
+
 ## Testing
 
 ### Local Testing
