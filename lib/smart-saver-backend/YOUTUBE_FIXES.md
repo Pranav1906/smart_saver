@@ -5,16 +5,22 @@ YouTube was requiring authentication ("Sign in to confirm you're not a bot") whe
 
 ## Solutions Implemented
 
-### 1. Anti-Bot Measures
+### 1. Enhanced Anti-Bot Measures
 - Added custom user agent to mimic a real browser
 - Added `--no-check-certificates` to bypass SSL issues
 - Added `--extractor-args "youtube:player_client=android"` to use Android client
-- Added `--cookies-from-browser chrome` to use browser cookies (if available)
+- Added multiple HTTP headers to mimic real browser requests:
+  - `Accept-Language:en-US,en;q=0.9`
+  - `Accept-Encoding:gzip, deflate, br`
+  - `DNT:1`
+  - `Connection:keep-alive`
+  - `Upgrade-Insecure-Requests:1`
 
 ### 2. Multiple Fallback Strategies
-- **Primary**: Best quality with height limit (1080p)
-- **Secondary**: Best quality without height limit
+- **Primary**: Best quality with height limit (1080p) with Android client
+- **Secondary**: Best quality without height limit with Android client
 - **Tertiary**: Mobile user agent with worst quality (for compatibility)
+- **Quaternary**: Web client with no format selection (automatic best)
 
 ### 3. Better Error Handling
 - Specific error messages for authentication issues
@@ -33,8 +39,11 @@ YouTube was requiring authentication ("Sign in to confirm you're not a bot") whe
 # Start the server
 npm start
 
-# Test with a specific URL
-BASE_URL=http://localhost:8080 TEST_URL=https://www.youtube.com/shorts/YOUR_VIDEO_ID npm test
+# Test with the original problematic video
+BASE_URL=http://localhost:8080 TEST_URL=https://www.youtube.com/shorts/x1c9Z6JN4QU npm test
+
+# Test with a different video that should work
+BASE_URL=http://localhost:8080 npm run test-diff
 
 # Or test the endpoints manually
 curl -X POST http://localhost:8080/test/youtube \

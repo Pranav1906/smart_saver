@@ -4,6 +4,7 @@
   "main": "server.js",
   "scripts": {
     "test": "node test_youtube.js",
+    "test-diff": "node test_different_video.js",
     "start": "node server.js",
     "dev": "nodemon server.js"
   },
