@@ -12,6 +12,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import '../controllers/share_controller.dart';
 import 'package:video_player/video_player.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
+import '../config/api_config.dart';
 
 class ReelsTab extends StatefulWidget {
   const ReelsTab({Key? key}) : super(key: key);
@@ -117,6 +118,12 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
       _showSnackBar("Please enter a valid Instagram Reels URL", isError: true);
       return;
     }
+    
+    // Check if it's likely a reel URL (contains /reel/ or /p/)
+    if (!url.contains("/reel/") && !url.contains("/p/")) {
+      _showSnackBar("Please enter a valid Instagram Reels or post URL", isError: true);
+      return;
+    }
 
     final hasPermission = await _requestStoragePermission();
     if (!hasPermission) {
@@ -130,7 +137,7 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
     http.Response? response;
     try {
       response = await http.post(
-        Uri.parse('http://10.0.2.2:3000/download/instagram'),
+        Uri.parse(ApiConfig.downloadInstagram),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'url': url, 'quality': 'best'}),
       ).timeout(const Duration(seconds: 45));
@@ -159,7 +166,8 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
 
         await Future.delayed(const Duration(milliseconds: 500));
         try {
-          final correctedFileUrl = fileUrl.replaceAll('localhost:3000', '10.0.2.2:3000');
+          // Use the Railway domain for file downloads
+          final correctedFileUrl = fileUrl.replaceAll('localhost:3000', 'smartsaver-production.up.railway.app');
           final tempDir = await getTemporaryDirectory();
           final tempFilePath = '${tempDir.path}/$originalFileName';
           final downloadPath = await _getDownloadPath();
@@ -193,7 +201,20 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
         }
       } else {
         final err = json.decode(response.body);
-        _showSnackBar('Failed: ${err['error'] ?? 'Unknown error'}', isError: true);
+        final errorMessage = err['error'] ?? 'Unknown error';
+        
+        // Handle specific error cases with better user messages
+        if (errorMessage.contains('does not contain a video')) {
+          _showSnackBar('This post has no video. Try with a reel or video post.', isError: true);
+        } else if (errorMessage.contains('unavailable') || errorMessage.contains('private')) {
+          _showSnackBar('Video is private or unavailable. Try with a public post.', isError: true);
+        } else if (errorMessage.contains('authentication') || errorMessage.contains('Sign in')) {
+          _showSnackBar('This post is private. Try with a public Instagram post.', isError: true);
+        } else if (errorMessage.contains('temporarily blocking') || errorMessage.contains('rate limit') || errorMessage.contains('try again later')) {
+          _showSnackBar('Instagram is blocking downloads. Try again in a few minutes.', isError: true);
+        } else {
+          _showSnackBar('Failed: $errorMessage', isError: true);
+        }
       }
     } finally {
       setState(() => _isLoading = false);
@@ -242,7 +263,7 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
     );
   }
 
-  String _getPlatformHint() => 'e.g., https://instagram.com/reel/...';
+  String _getPlatformHint() => 'e.g., https://instagram.com/reel/... or https://instagram.com/p/...';
 
   @override
   Widget build(BuildContext context) {
@@ -375,20 +396,35 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.blue.withOpacity(0.3)),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.info_outline, color: Colors.lightBlue, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          Platform.isAndroid
-                              ? 'Files will be saved to Downloads/SmartSaver folder'
-                              : 'Files will be saved to app documents',
-                          style: const TextStyle(
-                            color: Colors.lightBlue,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
+                      Row(
+                        children: [
+                          const Icon(Icons.info_outline, color: Colors.lightBlue, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Download Info',
+                              style: const TextStyle(
+                                color: Colors.lightBlue,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '• Only video content (reels, posts with videos) can be downloaded\n'
+                        '• Image-only posts cannot be downloaded\n'
+                        '• Private posts require authentication\n'
+                        '• Files saved to: ${Platform.isAndroid ? 'Downloads/SmartSaver' : 'app documents'}',
+                        style: const TextStyle(
+                          color: Colors.lightBlue,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
