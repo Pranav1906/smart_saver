@@ -1,5 +1,5 @@
 name: smart_saver
-description: "A new Flutter project."
+description: "Smart Saver - Download Instagram Reels, YouTube Shorts, and WhatsApp Status videos easily. Save your favorite content with just one click!"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -46,6 +46,8 @@ dependencies:
   video_player: ^2.7.0
   video_thumbnail: ^0.5.3
   share_plus: ^7.2.1
+  google_mobile_ads: ^4.0.0
+
 
 dev_dependencies:
   flutter_test:

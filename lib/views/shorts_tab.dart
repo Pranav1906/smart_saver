@@ -10,8 +10,11 @@ import 'dart:async';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import '../controllers/share_controller.dart';
+import '../widgets/interstitial_ad_manager.dart';
+import '../widgets/rewarded_ad_manager.dart';
 import 'package:video_player/video_player.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
+import '../config/api_config.dart';
 
 class ShortsTab extends StatefulWidget {
   const ShortsTab({Key? key}) : super(key: key);
@@ -125,12 +128,48 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
     }
 
     setState(() => _isLoading = true);
+    
+    // Show video ad first
+    bool adShown = false;
+    print('Checking if rewarded ad is ready: ${RewardedAdManager.isAdReady}');
+    if (RewardedAdManager.isAdReady) {
+      _showSnackBar("Watch a short video to download your short!", isLoading: true);
+      adShown = await RewardedAdManager.showRewardedAd();
+      print('Rewarded ad shown: $adShown');
+    } else {
+      print('Rewarded ad not ready, trying to load...');
+      await RewardedAdManager.loadRewardedAd();
+      if (RewardedAdManager.isAdReady) {
+        _showSnackBar("Watch a short video to download your short!", isLoading: true);
+        adShown = await RewardedAdManager.showRewardedAd();
+        print('Rewarded ad shown after loading: $adShown');
+      }
+    }
+    
+    // Show processing message
     _showSnackBar("Processing your request... Please wait", isLoading: true);
+    
+    // Process download in background
+    _processDownloadInBackground(url, adShown);
+  }
 
+  Future<void> _processDownloadInBackground(String url, bool adShown) async {
+    bool isProcessing = true;
+    Timer? processingTimer;
+    
+    // If ad was shown, start a timer to show processing banner if needed
+    if (adShown) {
+      processingTimer = Timer(const Duration(seconds: 3), () {
+        if (isProcessing) {
+          _showSnackBar("Processing your video... Please wait", isLoading: true);
+        }
+      });
+    }
+    
     http.Response? response;
     try {
       response = await http.post(
-        Uri.parse('http://10.0.2.2:3000/download/youtube'),
+        Uri.parse('${ApiConfig.baseUrl}/download/youtube'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'url': url, 'quality': 'best', 'type': 'video'}),
       ).timeout(const Duration(seconds: 45));
@@ -157,9 +196,17 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
         _showSnackBar("Download complete! Saving to device...", isSuccess: true);
         _controller.clear();
 
+        // If video ad was shown and finished, don't show interstitial
+        // If video ad wasn't shown or didn't finish, show interstitial
+        if (!adShown) {
+          await Future.delayed(const Duration(milliseconds: 1000));
+          await InterstitialAdManager.showInterstitialAd();
+        }
+
         await Future.delayed(const Duration(milliseconds: 500));
         try {
-          final correctedFileUrl = fileUrl.replaceAll('localhost:3000', '10.0.2.2:3000');
+          // Use the Railway domain for file downloads
+          final correctedFileUrl = fileUrl.replaceAll('localhost:3000', 'smartsaver-production.up.railway.app');
           final tempDir = await getTemporaryDirectory();
           final tempFilePath = '${tempDir.path}/$originalFileName';
           final downloadPath = await _getDownloadPath();
@@ -196,6 +243,8 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
         _showSnackBar('Failed: ${err['error'] ?? 'Unknown error'}', isError: true);
       }
     } finally {
+      isProcessing = false;
+      processingTimer?.cancel();
       setState(() => _isLoading = false);
     }
   }

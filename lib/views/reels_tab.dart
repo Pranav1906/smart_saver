@@ -10,8 +10,11 @@ import 'dart:async';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import '../controllers/share_controller.dart';
+import '../widgets/interstitial_ad_manager.dart';
+import '../widgets/rewarded_ad_manager.dart';
 import 'package:video_player/video_player.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
+import '../config/api_config.dart';
 
 class ReelsTab extends StatefulWidget {
   const ReelsTab({Key? key}) : super(key: key);
@@ -117,6 +120,12 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
       _showSnackBar("Please enter a valid Instagram Reels URL", isError: true);
       return;
     }
+    
+    // Check if it's likely a reel URL (contains /reel/ or /p/)
+    if (!url.contains("/reel/") && !url.contains("/p/")) {
+      _showSnackBar("Please enter a valid Instagram Reels or post URL", isError: true);
+      return;
+    }
 
     final hasPermission = await _requestStoragePermission();
     if (!hasPermission) {
@@ -125,12 +134,48 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
     }
 
     setState(() => _isLoading = true);
+    
+    // Show video ad first
+    bool adShown = false;
+    print('Checking if rewarded ad is ready: ${RewardedAdManager.isAdReady}');
+    if (RewardedAdManager.isAdReady) {
+      _showSnackBar("Watch a short video to download your reel!", isLoading: true);
+      adShown = await RewardedAdManager.showRewardedAd();
+      print('Rewarded ad shown: $adShown');
+    } else {
+      print('Rewarded ad not ready, trying to load...');
+      await RewardedAdManager.loadRewardedAd();
+      if (RewardedAdManager.isAdReady) {
+        _showSnackBar("Watch a short video to download your reel!", isLoading: true);
+        adShown = await RewardedAdManager.showRewardedAd();
+        print('Rewarded ad shown after loading: $adShown');
+      }
+    }
+    
+    // Show processing message
     _showSnackBar("Processing your request... Please wait", isLoading: true);
+    
+    // Process download in background
+    _processDownloadInBackground(url, adShown);
+  }
 
+  Future<void> _processDownloadInBackground(String url, bool adShown) async {
+    bool isProcessing = true;
+    Timer? processingTimer;
+    
+    // If ad was shown, start a timer to show processing banner if needed
+    if (adShown) {
+      processingTimer = Timer(const Duration(seconds: 3), () {
+        if (isProcessing) {
+          _showSnackBar("Processing your video... Please wait", isLoading: true);
+        }
+      });
+    }
+    
     http.Response? response;
     try {
       response = await http.post(
-        Uri.parse('http://10.0.2.2:3000/download/instagram'),
+        Uri.parse(ApiConfig.downloadInstagram),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'url': url, 'quality': 'best'}),
       ).timeout(const Duration(seconds: 45));
@@ -157,9 +202,17 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
         _showSnackBar("Download complete! Saving to device...", isSuccess: true);
         _controller.clear();
 
+        // If video ad was shown and finished, don't show interstitial
+        // If video ad wasn't shown or didn't finish, show interstitial
+        if (!adShown) {
+          await Future.delayed(const Duration(milliseconds: 1000));
+          await InterstitialAdManager.showInterstitialAd();
+        }
+
         await Future.delayed(const Duration(milliseconds: 500));
         try {
-          final correctedFileUrl = fileUrl.replaceAll('localhost:3000', '10.0.2.2:3000');
+          // Use the Railway domain for file downloads
+          final correctedFileUrl = fileUrl.replaceAll('localhost:3000', 'smartsaver-production.up.railway.app');
           final tempDir = await getTemporaryDirectory();
           final tempFilePath = '${tempDir.path}/$originalFileName';
           final downloadPath = await _getDownloadPath();
@@ -193,9 +246,24 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
         }
       } else {
         final err = json.decode(response.body);
-        _showSnackBar('Failed: ${err['error'] ?? 'Unknown error'}', isError: true);
+        final errorMessage = err['error'] ?? 'Unknown error';
+        
+        // Handle specific error cases with better user messages
+        if (errorMessage.contains('does not contain a video')) {
+          _showSnackBar('This post has no video. Try with a reel or video post.', isError: true);
+        } else if (errorMessage.contains('unavailable') || errorMessage.contains('private')) {
+          _showSnackBar('Video is private or unavailable. Try with a public post.', isError: true);
+        } else if (errorMessage.contains('authentication') || errorMessage.contains('Sign in')) {
+          _showSnackBar('This post is private. Try with a public Instagram post.', isError: true);
+        } else if (errorMessage.contains('temporarily blocking') || errorMessage.contains('rate limit') || errorMessage.contains('try again later')) {
+          _showSnackBar('Instagram is blocking downloads. Try again in a few minutes.', isError: true);
+        } else {
+          _showSnackBar('Failed: $errorMessage', isError: true);
+        }
       }
     } finally {
+      isProcessing = false;
+      processingTimer?.cancel();
       setState(() => _isLoading = false);
     }
   }
@@ -242,7 +310,7 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
     );
   }
 
-  String _getPlatformHint() => 'e.g., https://instagram.com/reel/...';
+  String _getPlatformHint() => 'e.g., https://instagram.com/reel/... or https://instagram.com/p/...';
 
   @override
   Widget build(BuildContext context) {
@@ -250,9 +318,10 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
       opacity: _fadeAnim,
       child: Center(
         child: SingleChildScrollView(
+          // padding: const EdgeInsets.only(bottom: 80), // Add bottom padding for banner ad
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            margin: const EdgeInsets.only(left: 16, right: 16, top: 100),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.10),
               borderRadius: BorderRadius.circular(24),
@@ -375,20 +444,35 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.blue.withOpacity(0.3)),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.info_outline, color: Colors.lightBlue, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          Platform.isAndroid
-                              ? 'Files will be saved to Downloads/SmartSaver folder'
-                              : 'Files will be saved to app documents',
-                          style: const TextStyle(
-                            color: Colors.lightBlue,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
+                      Row(
+                        children: [
+                          const Icon(Icons.info_outline, color: Colors.lightBlue, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Download Info',
+                              style: const TextStyle(
+                                color: Colors.lightBlue,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '• Only video content (reels, posts with videos) can be downloaded\n'
+                        '• Image-only posts cannot be downloaded\n'
+                        '• Private posts require authentication\n'
+                        '• Files saved to: ${Platform.isAndroid ? 'Downloads/SmartSaver' : 'app documents'}',
+                        style: const TextStyle(
+                          color: Colors.lightBlue,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
