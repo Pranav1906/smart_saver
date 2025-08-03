@@ -33,6 +33,8 @@ class DownloadService {
         // Facebook videos can be various formats
         return lowerUrl.contains('/video/') || 
                lowerUrl.contains('/watch/') || 
+               lowerUrl.contains('/reel/') ||
+               lowerUrl.contains('/share/r/') ||
                lowerUrl.contains('?v=') ||
                lowerUrl.contains('fb.watch');
       
@@ -68,7 +70,7 @@ class DownloadService {
       case PlatformType.instagram:
         return 'e.g., https://instagram.com/reel/... or https://instagram.com/p/...';
       case PlatformType.facebook:
-        return 'e.g., https://facebook.com/watch?v=... or https://fb.watch/...';
+        return 'e.g., https://facebook.com/reel/... or https://facebook.com/watch?v=... or https://facebook.com/share/r/... or https://fb.watch/...';
       case PlatformType.unknown:
         return 'Enter Instagram or Facebook video URL';
     }
