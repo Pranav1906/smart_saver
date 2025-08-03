@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
@@ -14,7 +12,7 @@ import '../widgets/interstitial_ad_manager.dart';
 import '../widgets/rewarded_ad_manager.dart';
 import 'package:video_player/video_player.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
-import '../config/api_config.dart';
+import '../services/download_service.dart';
 
 class ReelsTab extends StatefulWidget {
   const ReelsTab({Key? key}) : super(key: key);
@@ -38,6 +36,11 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
     );
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeInOut);
     _animController.forward();
+    
+    // Add listener to update hint text dynamically
+    _controller.addListener(() {
+      setState(() {}); // This will trigger rebuild to update hint text
+    });
   }
 
   @override
@@ -116,14 +119,18 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
       _showSnackBar("Please enter a valid URL");
       return;
     }
-    if (!url.contains("instagram.com") && !url.contains("instagr.am")) {
-      _showSnackBar("Please enter a valid Instagram Reels URL", isError: true);
+    
+    // Detect platform
+    final platform = DownloadService.detectPlatform(url);
+    if (platform == PlatformType.unknown) {
+      _showSnackBar("Please enter a valid Instagram or Facebook video URL", isError: true);
       return;
     }
     
-    // Check if it's likely a reel URL (contains /reel/ or /p/)
-    if (!url.contains("/reel/") && !url.contains("/p/")) {
-      _showSnackBar("Please enter a valid Instagram Reels or post URL", isError: true);
+    // Validate URL format for the detected platform
+    if (!DownloadService.isValidReelUrl(url, platform)) {
+      final platformName = DownloadService.getPlatformName(platform);
+      _showSnackBar("Please enter a valid $platformName video URL", isError: true);
       return;
     }
 
@@ -163,6 +170,9 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
     bool isProcessing = true;
     Timer? processingTimer;
     
+    // Detect platform
+    final platform = DownloadService.detectPlatform(url);
+    
     // If ad was shown, start a timer to show processing banner if needed
     if (adShown) {
       processingTimer = Timer(const Duration(seconds: 3), () {
@@ -172,95 +182,61 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
       });
     }
     
-    http.Response? response;
-    try {
-      response = await http.post(
-        Uri.parse(ApiConfig.downloadInstagram),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'url': url, 'quality': 'best'}),
-      ).timeout(const Duration(seconds: 45));
-    } on SocketException {
-      _showSnackBar('Network error. Check your connection.', isError: true);
-      setState(() => _isLoading = false);
-      return;
-    } on TimeoutException {
-      _showSnackBar('Request timed out. Please try again.', isError: true);
-      setState(() => _isLoading = false);
-      return;
-    } catch (e) {
-      _showSnackBar('Error: ${e.toString()}', isError: true);
-      setState(() => _isLoading = false);
-      return;
-    }
-
-    try {
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final fileUrl = data['fileUrl'];
-        final originalFileName = data['filename'] ?? fileUrl.split('/').last;
-
-        _showSnackBar("Download complete! Saving to device...", isSuccess: true);
-        _controller.clear();
-
-        // If video ad was shown and finished, don't show interstitial
-        // If video ad wasn't shown or didn't finish, show interstitial
-        if (!adShown) {
-          await Future.delayed(const Duration(milliseconds: 1000));
-          await InterstitialAdManager.showInterstitialAd();
-        }
-
-        await Future.delayed(const Duration(milliseconds: 500));
         try {
-          // Use the Railway domain for file downloads
-          final correctedFileUrl = fileUrl.replaceAll('localhost:3000', 'smartsaver-production.up.railway.app');
-          final tempDir = await getTemporaryDirectory();
-          final tempFilePath = '${tempDir.path}/$originalFileName';
-          final downloadPath = await _getDownloadPath();
-          final permanentFilePath = '$downloadPath/$originalFileName';
+      final data = await DownloadService.downloadVideo(url, platform);
+      final fileUrl = data['fileUrl'];
+      final originalFileName = data['filename'] ?? fileUrl.split('/').last;
 
-          _showSnackBar("Downloading file...", isLoading: true);
-          await Dio().download(correctedFileUrl, tempFilePath);
+      _showSnackBar("Download complete! Saving to device...", isSuccess: true);
+      _controller.clear();
 
-          final tempFile = File(tempFilePath);
-          await tempFile.copy(permanentFilePath);
-
-          _showSnackBar("File saved to Downloads/SmartSaver folder", isSuccess: true);
-
-          // After saving the file in _handleDownload, show a dialog to preview and share
-          await showDialog(
-            context: context,
-            builder: (_) => MediaPreviewDialog(file: File(permanentFilePath)),
-          );
-
-          try {
-            await OpenFile.open(tempFilePath);
-          } catch (e) {
-            _showSnackBar("File saved to: Downloads/SmartSaver/$originalFileName", isSuccess: true);
-          }
-        } on SocketException {
-          _showSnackBar('Network error. Check your connection.', isError: true);
-        } on TimeoutException {
-          _showSnackBar('Request timed out. Please try again.', isError: true);
-        } catch (e) {
-          _showSnackBar('Download failed: ${e.toString()}', isError: true);
-        }
-      } else {
-        final err = json.decode(response.body);
-        final errorMessage = err['error'] ?? 'Unknown error';
-        
-        // Handle specific error cases with better user messages
-        if (errorMessage.contains('does not contain a video')) {
-          _showSnackBar('This post has no video. Try with a reel or video post.', isError: true);
-        } else if (errorMessage.contains('unavailable') || errorMessage.contains('private')) {
-          _showSnackBar('Video is private or unavailable. Try with a public post.', isError: true);
-        } else if (errorMessage.contains('authentication') || errorMessage.contains('Sign in')) {
-          _showSnackBar('This post is private. Try with a public Instagram post.', isError: true);
-        } else if (errorMessage.contains('temporarily blocking') || errorMessage.contains('rate limit') || errorMessage.contains('try again later')) {
-          _showSnackBar('Instagram is blocking downloads. Try again in a few minutes.', isError: true);
-        } else {
-          _showSnackBar('Failed: $errorMessage', isError: true);
-        }
+      // If video ad was shown and finished, don't show interstitial
+      // If video ad wasn't shown or didn't finish, show interstitial
+      if (!adShown) {
+        await Future.delayed(const Duration(milliseconds: 1000));
+        await InterstitialAdManager.showInterstitialAd();
       }
+
+      await Future.delayed(const Duration(milliseconds: 500));
+      try {
+        // Use the Railway domain for file downloads
+        final correctedFileUrl = fileUrl.replaceAll('localhost:3000', 'smartsaver-production.up.railway.app');
+        final tempDir = await getTemporaryDirectory();
+        final tempFilePath = '${tempDir.path}/$originalFileName';
+        final downloadPath = await _getDownloadPath();
+        final permanentFilePath = '$downloadPath/$originalFileName';
+
+        _showSnackBar("Downloading file...", isLoading: true);
+        await Dio().download(correctedFileUrl, tempFilePath);
+
+        final tempFile = File(tempFilePath);
+        await tempFile.copy(permanentFilePath);
+
+        _showSnackBar("File saved to Downloads/SmartSaver folder", isSuccess: true);
+
+        // After saving the file in _handleDownload, show a dialog to preview and share
+        await showDialog(
+          context: context,
+          builder: (_) => MediaPreviewDialog(file: File(permanentFilePath)),
+        );
+
+        try {
+          await OpenFile.open(tempFilePath);
+        } catch (e) {
+          _showSnackBar("File saved to: Downloads/SmartSaver/$originalFileName", isSuccess: true);
+        }
+      } on SocketException {
+        _showSnackBar('Network error. Check your connection.', isError: true);
+      } on TimeoutException {
+        _showSnackBar('Request timed out. Please try again.', isError: true);
+      } catch (e) {
+        _showSnackBar('Download failed: ${e.toString()}', isError: true);
+      }
+    } catch (e) {
+      final errorMessage = e.toString();
+      final platformName = DownloadService.getPlatformName(platform);
+      final userFriendlyMessage = DownloadService.getErrorMessage(errorMessage, platform);
+      _showSnackBar(userFriendlyMessage, isError: true);
     } finally {
       isProcessing = false;
       processingTimer?.cancel();
@@ -310,7 +286,14 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
     );
   }
 
-  String _getPlatformHint() => 'e.g., https://instagram.com/reel/... or https://instagram.com/p/...';
+  String _getPlatformHint() {
+    final url = _controller.text.trim();
+    if (url.isNotEmpty) {
+      final platform = DownloadService.detectPlatform(url);
+      return DownloadService.getPlatformHint(platform);
+    }
+    return 'Enter Instagram or Facebook video URL';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -357,7 +340,7 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  'Download Reels',
+                  'Download Reels & Videos',
                   style: GoogleFonts.montserrat(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -368,7 +351,7 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Paste your Instagram Reels link below:',
+                  'Paste your Instagram Reels or Facebook video link below:',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: Colors.white70,
                         fontWeight: FontWeight.w500,
@@ -465,7 +448,8 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '• Only video content (reels, posts with videos) can be downloaded\n'
+                        '• Supports Instagram Reels and Facebook videos\n'
+                        '• Only video content can be downloaded\n'
                         '• Image-only posts cannot be downloaded\n'
                         '• Private posts require authentication\n'
                         '• Files saved to: ${Platform.isAndroid ? 'Downloads/SmartSaver' : 'app documents'}',
