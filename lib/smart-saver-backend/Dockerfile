@@ -4,19 +4,13 @@ FROM node:18-alpine
 # Install system dependencies
 RUN apk add --no-cache \
     python3 \
-    py3-pip \
+    py3-yt-dlp \
     ffmpeg \
     curl \
     wget \
     && rm -rf /var/cache/apk/*
 
-# Create virtual environment and install yt-dlp
-RUN python3 -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --upgrade pip && pip install --upgrade yt-dlp
-
-# Update yt-dlp to latest version
-RUN /opt/venv/bin/yt-dlp -U
+# Note: yt-dlp installed via Alpine package (py3-yt-dlp). No pip/venv required.
 
 # Create app directory
 WORKDIR /app
