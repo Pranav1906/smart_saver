@@ -7,6 +7,8 @@ class ApiConfig {
   static String get videoInfo => '$baseUrl/video/info';
   static String get downloadYoutube => '$baseUrl/download/youtube';
   static String get resolveYoutube => '$baseUrl/resolve/youtube';
+  static String get jobsYoutube => '$baseUrl/jobs/youtube';
+  static String jobStatus(String id) => '$baseUrl/jobs/$id';
   static String get downloadInstagram => '$baseUrl/download/instagram';
   static String get downloadFacebook => '$baseUrl/download/facebook';
   static String get downloadAuto => '$baseUrl/download/auto';

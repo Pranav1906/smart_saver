@@ -152,18 +152,18 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
     
     http.Response? response;
     try {
-      // Resolve direct media URL(s) quickly to avoid backend timeouts
+      // Start async job to avoid proxy timeouts
       response = await http.post(
-        Uri.parse(ApiConfig.resolveYoutube),
+        Uri.parse(ApiConfig.jobsYoutube),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'url': url}),
-      ).timeout(const Duration(seconds: 45));
+      ).timeout(const Duration(seconds: 20));
     } on SocketException {
       _showSnackBar('Network error. Check your connection.', isError: true);
       setState(() => _isLoading = false);
       return;
     } on TimeoutException {
-      _showSnackBar('Resolver timed out. Please try again.', isError: true);
+      _showSnackBar('Request timed out. Please try again.', isError: true);
       setState(() => _isLoading = false);
       return;
     } catch (e) {
@@ -173,19 +173,37 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
     }
 
     try {
-      if (response.statusCode == 200) {
+      if (response.statusCode == 202) {
         final data = json.decode(response.body);
-        final List urls = (data['urls'] as List?) ?? [];
-        if (urls.isEmpty) {
-          _showSnackBar('Could not resolve media URL.', isError: true);
+        final String jobId = data['jobId'];
+        _controller.clear();
+        _showSnackBar("Processing your video...", isLoading: true);
+        // Poll for completion
+        final startTime = DateTime.now();
+        Map<String, dynamic>? job;
+        while (true) {
+          await Future.delayed(const Duration(seconds: 2));
+          final statusResp = await http.get(Uri.parse(ApiConfig.jobStatus(jobId))).timeout(const Duration(seconds: 15));
+          if (statusResp.statusCode == 200) {
+            final statusData = json.decode(statusResp.body);
+            job = statusData['job'];
+            if (job != null && (job['status'] == 'completed' || job['status'] == 'failed')) break;
+          }
+          if (DateTime.now().difference(startTime).inMinutes >= 2) {
+            throw TimeoutException('Job timed out');
+          }
+        }
+        if (job == null) {
+          _showSnackBar('Failed to get job status.', isError: true);
           return;
         }
-        // Prefer a single progressive stream if present (first line when using -f b/...)
-        final fileUrl = urls.first as String;
-        final originalFileName = 'shorts_${DateTime.now().millisecondsSinceEpoch}.mp4';
-
-        _showSnackBar("Resolving done! Downloading...", isLoading: true);
-        _controller.clear();
+        if (job['status'] != 'completed') {
+          _showSnackBar('Download failed: ${job['error'] ?? 'unknown'}', isError: true);
+          return;
+        }
+        final fileUrl = job['fileUrl'] as String;
+        final originalFileName = job['filename'] as String? ?? 'shorts_${DateTime.now().millisecondsSinceEpoch}.mp4';
+        _showSnackBar("Downloading...", isLoading: true);
 
         // Ads removed
 
