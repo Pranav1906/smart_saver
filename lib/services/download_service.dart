@@ -9,6 +9,17 @@ enum PlatformType {
 }
 
 class DownloadService {
+  static Future<bool> checkBackendReachable() async {
+    try {
+      final uri = Uri.parse(ApiConfig.healthCheck);
+      final response = await http
+          .get(uri, headers: {'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 10));
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
   static PlatformType detectPlatform(String url) {
     final lowerUrl = url.toLowerCase();
     
@@ -75,14 +86,22 @@ class DownloadService {
   }
 
   static Future<Map<String, dynamic>> downloadVideo(String url, PlatformType platform) async {
+    // Fire-and-forget health probe for logging only; do not block requests
+    checkBackendReachable().then((ok) {
+      // ignore: avoid_print
+      if (!ok) print('Warning: health probe failed');
+    });
     final endpoint = getApiEndpoint(platform);
+    // Debug log
+    // ignore: avoid_print
+    print('Posting to endpoint: ' + endpoint);
     
     try {
       final response = await http.post(
         Uri.parse(endpoint),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'url': url, 'quality': 'best'}),
-      ).timeout(const Duration(seconds: 45));
+      ).timeout(const Duration(seconds: 60));
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
