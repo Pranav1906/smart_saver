@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'views/splash_screen.dart';
 import 'views/home_screen.dart';
 import 'widgets/interstitial_ad_manager.dart';
@@ -7,6 +8,8 @@ import 'widgets/rewarded_ad_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Avoid runtime font downloads which can fail offline
+  GoogleFonts.config.allowRuntimeFetching = false;
   
   // Initialize Google Mobile Ads
   await MobileAds.instance.initialize();

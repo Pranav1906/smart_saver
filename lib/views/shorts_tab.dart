@@ -168,17 +168,18 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
     
     http.Response? response;
     try {
+      // Resolve direct media URL(s) quickly to avoid backend timeouts
       response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/download/youtube'),
+        Uri.parse(ApiConfig.resolveYoutube),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'url': url, 'quality': 'best', 'type': 'video'}),
-      ).timeout(const Duration(seconds: 45));
+        body: json.encode({'url': url}),
+      ).timeout(const Duration(seconds: 20));
     } on SocketException {
       _showSnackBar('Network error. Check your connection.', isError: true);
       setState(() => _isLoading = false);
       return;
     } on TimeoutException {
-      _showSnackBar('Request timed out. Please try again.', isError: true);
+      _showSnackBar('Resolver timed out. Please try again.', isError: true);
       setState(() => _isLoading = false);
       return;
     } catch (e) {
@@ -190,10 +191,16 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
     try {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final fileUrl = data['fileUrl'];
-        final originalFileName = data['filename'] ?? fileUrl.split('/').last;
+        final List urls = (data['urls'] as List?) ?? [];
+        if (urls.isEmpty) {
+          _showSnackBar('Could not resolve media URL.', isError: true);
+          return;
+        }
+        // Prefer a single progressive stream if present (first line when using -f b/...)
+        final fileUrl = urls.first as String;
+        final originalFileName = 'shorts_${DateTime.now().millisecondsSinceEpoch}.mp4';
 
-        _showSnackBar("Download complete! Saving to device...", isSuccess: true);
+        _showSnackBar("Resolving done! Downloading...", isLoading: true);
         _controller.clear();
 
         // If video ad was shown and finished, don't show interstitial
@@ -205,8 +212,8 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
 
         await Future.delayed(const Duration(milliseconds: 500));
         try {
-          // Use the Railway domain for file downloads
-          final correctedFileUrl = fileUrl.replaceAll('localhost:3000', 'smartsaver-production.up.railway.app');
+          // Download directly from CDN/source URL
+          final correctedFileUrl = fileUrl;
           final tempDir = await getTemporaryDirectory();
           final tempFilePath = '${tempDir.path}/$originalFileName';
           final downloadPath = await _getDownloadPath();
@@ -239,8 +246,12 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
           _showSnackBar('Download failed: ${e.toString()}', isError: true);
         }
       } else {
-        final err = json.decode(response.body);
-        _showSnackBar('Failed: ${err['error'] ?? 'Unknown error'}', isError: true);
+        try {
+          final err = json.decode(response.body);
+          _showSnackBar('Failed: ${err['error'] ?? 'Unknown error'}', isError: true);
+        } catch (_) {
+          _showSnackBar('Failed with status ${response.statusCode}', isError: true);
+        }
       }
     } finally {
       isProcessing = false;
