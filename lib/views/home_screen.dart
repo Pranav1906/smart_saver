@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../widgets/banner_ad_widget.dart';
 import 'reels_tab.dart';
 import 'shorts_tab.dart';
 import 'whatsapp_tab.dart';
@@ -18,11 +16,12 @@ class HomeScreen extends StatelessWidget {
         appBar: AppBar(
           title: Text(
             'Smart Saver',
-            style: GoogleFonts.montserrat(
+            style: TextStyle(
               fontWeight: FontWeight.w900,
               fontSize: 28,
               letterSpacing: 2,
               color: const Color(0xFF102542),
+              fontFamily: 'Roboto',
               shadows: [
                 Shadow(
                   color: Colors.black.withOpacity(0.10),
@@ -61,32 +60,21 @@ class HomeScreen extends StatelessWidget {
             ],
           ),
         ),
-        body: Column(
-          children: [
-            Expanded(
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF43CEA2), Color(0xFF185A9D)],
-                  ),
-                ),
-                child: const TabBarView(
-                  children: [
-                    ReelsTab(),
-                    ShortsTab(),
-                    WhatsAppTab(),
-                  ],
-                ),
-              ),
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF43CEA2), Color(0xFF185A9D)],
             ),
-            // Banner Ad at the bottom
-            const BannerAdWidget(
-              margin: EdgeInsets.only(bottom: 8),
-              showBorder: false,
-            ),
-          ],
+          ),
+          child: const TabBarView(
+            children: [
+              ReelsTab(),
+              ShortsTab(),
+              WhatsAppTab(),
+            ],
+          ),
         ),
       ),
     );

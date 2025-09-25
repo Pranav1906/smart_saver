@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:dio/dio.dart';
@@ -10,8 +9,7 @@ import 'dart:async';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import '../controllers/share_controller.dart';
-import '../widgets/interstitial_ad_manager.dart';
-import '../widgets/rewarded_ad_manager.dart';
+ 
 import 'package:video_player/video_player.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import '../config/api_config.dart';
@@ -129,22 +127,8 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
 
     setState(() => _isLoading = true);
     
-    // Show video ad first
+    // Ads removed
     bool adShown = false;
-    print('Checking if rewarded ad is ready: ${RewardedAdManager.isAdReady}');
-    if (RewardedAdManager.isAdReady) {
-      _showSnackBar("Watch a short video to download your short!", isLoading: true);
-      adShown = await RewardedAdManager.showRewardedAd();
-      print('Rewarded ad shown: $adShown');
-    } else {
-      print('Rewarded ad not ready, trying to load...');
-      await RewardedAdManager.loadRewardedAd();
-      if (RewardedAdManager.isAdReady) {
-        _showSnackBar("Watch a short video to download your short!", isLoading: true);
-        adShown = await RewardedAdManager.showRewardedAd();
-        print('Rewarded ad shown after loading: $adShown');
-      }
-    }
     
     // Show processing message
     _showSnackBar("Processing your request... Please wait", isLoading: true);
@@ -173,7 +157,7 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
         Uri.parse(ApiConfig.resolveYoutube),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'url': url}),
-      ).timeout(const Duration(seconds: 20));
+      ).timeout(const Duration(seconds: 45));
     } on SocketException {
       _showSnackBar('Network error. Check your connection.', isError: true);
       setState(() => _isLoading = false);
@@ -203,12 +187,7 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
         _showSnackBar("Resolving done! Downloading...", isLoading: true);
         _controller.clear();
 
-        // If video ad was shown and finished, don't show interstitial
-        // If video ad wasn't shown or didn't finish, show interstitial
-        if (!adShown) {
-          await Future.delayed(const Duration(milliseconds: 1000));
-          await InterstitialAdManager.showInterstitialAd();
-        }
+        // Ads removed
 
         await Future.delayed(const Duration(milliseconds: 500));
         try {
@@ -349,11 +328,12 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
                 const SizedBox(height: 20),
                 Text(
                   'Download Shorts',
-                  style: GoogleFonts.montserrat(
+                  style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                     letterSpacing: 1,
+                    fontFamily: 'Roboto',
                   ),
                   textAlign: TextAlign.center,
                 ),
