@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'reels_tab.dart';
 import 'shorts_tab.dart';
 import 'whatsapp_tab.dart';
@@ -17,11 +16,12 @@ class HomeScreen extends StatelessWidget {
         appBar: AppBar(
           title: Text(
             'Smart Saver',
-            style: GoogleFonts.montserrat(
+            style: TextStyle(
               fontWeight: FontWeight.w900,
               fontSize: 28,
               letterSpacing: 2,
               color: const Color(0xFF102542),
+              fontFamily: 'Roboto',
               shadows: [
                 Shadow(
                   color: Colors.black.withOpacity(0.10),

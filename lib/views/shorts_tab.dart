@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:dio/dio.dart';
@@ -10,8 +9,10 @@ import 'dart:async';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import '../controllers/share_controller.dart';
+ 
 import 'package:video_player/video_player.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
+import '../config/api_config.dart';
 
 class ShortsTab extends StatefulWidget {
   const ShortsTab({Key? key}) : super(key: key);
@@ -25,6 +26,38 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
   bool _isLoading = false;
+
+  // Simple POST with retries and configurable timeout
+  Future<http.Response?> _postJsonWithRetries(
+    Uri uri,
+    Map<String, dynamic> body, {
+    int retries = 2,
+    Duration timeout = const Duration(seconds: 45),
+  }) async {
+    http.Response? lastResponse;
+    for (int attempt = 0; attempt <= retries; attempt++) {
+      try {
+        final resp = await http
+            .post(
+              uri,
+              headers: {'Content-Type': 'application/json'},
+              body: json.encode(body),
+            )
+            .timeout(timeout);
+        return resp;
+      } on TimeoutException {
+        if (attempt == retries) rethrow;
+      } on SocketException {
+        if (attempt == retries) rethrow;
+      } catch (_) {
+        // Break on unexpected errors
+        break;
+      }
+      // Exponential backoff between retries
+      await Future.delayed(Duration(milliseconds: 500 * (attempt + 1)));
+    }
+    return lastResponse;
+  }
 
   @override
   void initState() {
@@ -125,15 +158,85 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
     }
 
     setState(() => _isLoading = true);
+    
+    // Ads removed
+    bool adShown = false;
+    
+    // Show processing message
     _showSnackBar("Processing your request... Please wait", isLoading: true);
+    
+    // Process download in background
+    _processDownloadInBackground(url, adShown);
+  }
 
+  Future<void> _processDownloadInBackground(String url, bool adShown) async {
+    bool isProcessing = true;
+    Timer? processingTimer;
+    
+    // If ad was shown, start a timer to show processing banner if needed
+    if (adShown) {
+      processingTimer = Timer(const Duration(seconds: 3), () {
+        if (isProcessing) {
+          _showSnackBar("Processing your video... Please wait", isLoading: true);
+        }
+      });
+    }
+    
+    // 1) Fast path: resolve direct media URL and download client-side
+    try {
+      final resolveResp = await _postJsonWithRetries(
+        Uri.parse(ApiConfig.resolveYoutube),
+        {'url': url},
+        retries: 2,
+        timeout: const Duration(seconds: 30),
+      );
+
+      if (resolveResp != null && resolveResp.statusCode == 200) {
+        final resolveData = json.decode(resolveResp.body);
+        final List urls = (resolveData['urls'] as List?) ?? const [];
+        if (urls.isNotEmpty) {
+          final mediaUrl = urls.first as String;
+          final originalFileName = 'shorts_${DateTime.now().millisecondsSinceEpoch}.mp4';
+
+          final tempDir = await getTemporaryDirectory();
+          final tempFilePath = '${tempDir.path}/$originalFileName';
+          final downloadPath = await _getDownloadPath();
+          final permanentFilePath = '$downloadPath/$originalFileName';
+
+          _showSnackBar("Downloading...", isLoading: true);
+          await Dio().download(mediaUrl, tempFilePath);
+
+          final tempFile = File(tempFilePath);
+          await tempFile.copy(permanentFilePath);
+
+          _showSnackBar("File saved to Downloads/SmartSaver folder", isSuccess: true);
+          _controller.clear();
+
+          await showDialog(
+            context: context,
+            builder: (_) => MediaPreviewDialog(file: File(permanentFilePath)),
+          );
+
+          try {
+            await OpenFile.open(tempFilePath);
+          } catch (_) {}
+
+          return; // Done via fast path
+        }
+      }
+    } catch (_) {
+      // Ignore and fall back to jobs flow
+    }
+
+    // 2) Fallback: start async job and poll until the server saves the file
     http.Response? response;
     try {
-      response = await http.post(
-        Uri.parse('http://10.0.2.2:3000/download/youtube'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'url': url, 'quality': 'best', 'type': 'video'}),
-      ).timeout(const Duration(seconds: 45));
+      response = await _postJsonWithRetries(
+        Uri.parse(ApiConfig.jobsYoutube),
+        {'url': url},
+        retries: 2,
+        timeout: const Duration(seconds: 45),
+      );
     } on SocketException {
       _showSnackBar('Network error. Check your connection.', isError: true);
       setState(() => _isLoading = false);
@@ -149,17 +252,42 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
     }
 
     try {
-      if (response.statusCode == 200) {
+      if (response != null && response.statusCode == 202) {
         final data = json.decode(response.body);
-        final fileUrl = data['fileUrl'];
-        final originalFileName = data['filename'] ?? fileUrl.split('/').last;
-
-        _showSnackBar("Download complete! Saving to device...", isSuccess: true);
+        final String jobId = data['jobId'];
         _controller.clear();
+        _showSnackBar("Processing your video...", isLoading: true);
+        // Poll for completion
+        final startTime = DateTime.now();
+        Map<String, dynamic>? job;
+        while (true) {
+          await Future.delayed(const Duration(seconds: 2));
+          final statusResp = await http.get(Uri.parse(ApiConfig.jobStatus(jobId))).timeout(const Duration(seconds: 15));
+          if (statusResp.statusCode == 200) {
+            final statusData = json.decode(statusResp.body);
+            job = statusData['job'];
+            if (job != null && (job['status'] == 'completed' || job['status'] == 'failed')) break;
+          }
+          if (DateTime.now().difference(startTime).inMinutes >= 2) {
+            throw TimeoutException('Job timed out');
+          }
+        }
+        if (job['status'] != 'completed') {
+          _showSnackBar('Download failed: ${job['error'] ?? 'unknown'}', isError: true);
+          return;
+        }
+        String? fileUrl = job['fileUrl'] as String?;
+        final originalFileName = job['filename'] as String? ?? 'shorts_${DateTime.now().millisecondsSinceEpoch}.mp4';
+        // Fallback if backend didn't include absolute fileUrl
+        fileUrl ??= ApiConfig.getFile(originalFileName);
+        _showSnackBar("Downloading...", isLoading: true);
+
+        // Ads removed
 
         await Future.delayed(const Duration(milliseconds: 500));
         try {
-          final correctedFileUrl = fileUrl.replaceAll('localhost:3000', '10.0.2.2:3000');
+          // Download directly from CDN/source URL
+          final correctedFileUrl = fileUrl;
           final tempDir = await getTemporaryDirectory();
           final tempFilePath = '${tempDir.path}/$originalFileName';
           final downloadPath = await _getDownloadPath();
@@ -192,10 +320,16 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
           _showSnackBar('Download failed: ${e.toString()}', isError: true);
         }
       } else {
-        final err = json.decode(response.body);
-        _showSnackBar('Failed: ${err['error'] ?? 'Unknown error'}', isError: true);
+        try {
+          final err = json.decode(response?.body ?? '{}');
+          _showSnackBar('Failed: ${err['error'] ?? 'Unknown error'}', isError: true);
+        } catch (_) {
+          _showSnackBar('Failed with status ${response?.statusCode ?? 'unknown'}', isError: true);
+        }
       }
     } finally {
+      isProcessing = false;
+      processingTimer?.cancel();
       setState(() => _isLoading = false);
     }
   }
@@ -289,11 +423,12 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
                 const SizedBox(height: 20),
                 Text(
                   'Download Shorts',
-                  style: GoogleFonts.montserrat(
+                  style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                     letterSpacing: 1,
+                    fontFamily: 'Roboto',
                   ),
                   textAlign: TextAlign.center,
                 ),
