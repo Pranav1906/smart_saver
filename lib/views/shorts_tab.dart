@@ -187,8 +187,8 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
       final resolveResp = await _postJsonWithRetries(
         Uri.parse(ApiConfig.resolveYoutube),
         {'url': url},
-        retries: 2,
-        timeout: const Duration(seconds: 30),
+        retries: 1,
+        timeout: const Duration(seconds: 9),
       );
 
       if (resolveResp != null && resolveResp.statusCode == 200) {
