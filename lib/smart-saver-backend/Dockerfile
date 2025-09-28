@@ -1,16 +1,23 @@
 # Use Node.js 18 Alpine as base image
 FROM node:18-alpine
 
-# Install system dependencies
+# Install system dependencies (no Alpine py3-yt-dlp in v3.21, use pip in a venv)
 RUN apk add --no-cache \
     python3 \
-    py3-yt-dlp \
+    py3-pip \
     ffmpeg \
+    bash \
     curl \
     wget \
     && rm -rf /var/cache/apk/*
 
-# Note: yt-dlp installed via Alpine package (py3-yt-dlp). No pip/venv required.
+# Create Python venv and install yt-dlp
+RUN python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel \
+    && /opt/venv/bin/pip install --no-cache-dir yt-dlp
+
+# Ensure yt-dlp is on PATH
+ENV PATH="/opt/venv/bin:${PATH}"
 
 # Create app directory
 WORKDIR /app
