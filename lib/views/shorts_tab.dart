@@ -169,10 +169,10 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
     http.Response? response;
     try {
       response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/download/youtube'),
+        Uri.parse(ApiConfig.downloadYoutube),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'url': url, 'quality': 'best', 'type': 'video'}),
-      ).timeout(const Duration(seconds: 45));
+      ).timeout(const Duration(seconds: 75));
     } on SocketException {
       _showSnackBar('Network error. Check your connection.', isError: true);
       setState(() => _isLoading = false);
@@ -240,7 +240,8 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
         }
       } else {
         final err = json.decode(response.body);
-        _showSnackBar('Failed: ${err['error'] ?? 'Unknown error'}', isError: true);
+        final suggestion = err['suggestion'] != null ? "\n${err['suggestion']}" : '';
+        _showSnackBar('Failed: ${err['error'] ?? 'Unknown error'}$suggestion', isError: true);
       }
     } finally {
       isProcessing = false;
