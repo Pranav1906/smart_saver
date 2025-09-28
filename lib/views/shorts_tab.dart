@@ -27,6 +27,38 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
   late Animation<double> _fadeAnim;
   bool _isLoading = false;
 
+  // Simple POST with retries and configurable timeout
+  Future<http.Response?> _postJsonWithRetries(
+    Uri uri,
+    Map<String, dynamic> body, {
+    int retries = 2,
+    Duration timeout = const Duration(seconds: 45),
+  }) async {
+    http.Response? lastResponse;
+    for (int attempt = 0; attempt <= retries; attempt++) {
+      try {
+        final resp = await http
+            .post(
+              uri,
+              headers: {'Content-Type': 'application/json'},
+              body: json.encode(body),
+            )
+            .timeout(timeout);
+        return resp;
+      } on TimeoutException {
+        if (attempt == retries) rethrow;
+      } on SocketException {
+        if (attempt == retries) rethrow;
+      } catch (_) {
+        // Break on unexpected errors
+        break;
+      }
+      // Exponential backoff between retries
+      await Future.delayed(Duration(milliseconds: 500 * (attempt + 1)));
+    }
+    return lastResponse;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -150,14 +182,61 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
       });
     }
     
+    // 1) Fast path: resolve direct media URL and download client-side
+    try {
+      final resolveResp = await _postJsonWithRetries(
+        Uri.parse(ApiConfig.resolveYoutube),
+        {'url': url},
+        retries: 2,
+        timeout: const Duration(seconds: 30),
+      );
+
+      if (resolveResp != null && resolveResp.statusCode == 200) {
+        final resolveData = json.decode(resolveResp.body);
+        final List urls = (resolveData['urls'] as List?) ?? const [];
+        if (urls.isNotEmpty) {
+          final mediaUrl = urls.first as String;
+          final originalFileName = 'shorts_${DateTime.now().millisecondsSinceEpoch}.mp4';
+
+          final tempDir = await getTemporaryDirectory();
+          final tempFilePath = '${tempDir.path}/$originalFileName';
+          final downloadPath = await _getDownloadPath();
+          final permanentFilePath = '$downloadPath/$originalFileName';
+
+          _showSnackBar("Downloading...", isLoading: true);
+          await Dio().download(mediaUrl, tempFilePath);
+
+          final tempFile = File(tempFilePath);
+          await tempFile.copy(permanentFilePath);
+
+          _showSnackBar("File saved to Downloads/SmartSaver folder", isSuccess: true);
+          _controller.clear();
+
+          await showDialog(
+            context: context,
+            builder: (_) => MediaPreviewDialog(file: File(permanentFilePath)),
+          );
+
+          try {
+            await OpenFile.open(tempFilePath);
+          } catch (_) {}
+
+          return; // Done via fast path
+        }
+      }
+    } catch (_) {
+      // Ignore and fall back to jobs flow
+    }
+
+    // 2) Fallback: start async job and poll until the server saves the file
     http.Response? response;
     try {
-      // Start async job to avoid proxy timeouts
-      response = await http.post(
+      response = await _postJsonWithRetries(
         Uri.parse(ApiConfig.jobsYoutube),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'url': url}),
-      ).timeout(const Duration(seconds: 20));
+        {'url': url},
+        retries: 2,
+        timeout: const Duration(seconds: 45),
+      );
     } on SocketException {
       _showSnackBar('Network error. Check your connection.', isError: true);
       setState(() => _isLoading = false);
@@ -173,7 +252,7 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
     }
 
     try {
-      if (response.statusCode == 202) {
+      if (response != null && response.statusCode == 202) {
         final data = json.decode(response.body);
         final String jobId = data['jobId'];
         _controller.clear();
@@ -193,16 +272,14 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
             throw TimeoutException('Job timed out');
           }
         }
-        if (job == null) {
-          _showSnackBar('Failed to get job status.', isError: true);
-          return;
-        }
         if (job['status'] != 'completed') {
           _showSnackBar('Download failed: ${job['error'] ?? 'unknown'}', isError: true);
           return;
         }
-        final fileUrl = job['fileUrl'] as String;
+        String? fileUrl = job['fileUrl'] as String?;
         final originalFileName = job['filename'] as String? ?? 'shorts_${DateTime.now().millisecondsSinceEpoch}.mp4';
+        // Fallback if backend didn't include absolute fileUrl
+        fileUrl ??= ApiConfig.getFile(originalFileName);
         _showSnackBar("Downloading...", isLoading: true);
 
         // Ads removed
@@ -244,10 +321,10 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
         }
       } else {
         try {
-          final err = json.decode(response.body);
+          final err = json.decode(response?.body ?? '{}');
           _showSnackBar('Failed: ${err['error'] ?? 'Unknown error'}', isError: true);
         } catch (_) {
-          _showSnackBar('Failed with status ${response.statusCode}', isError: true);
+          _showSnackBar('Failed with status ${response?.statusCode ?? 'unknown'}', isError: true);
         }
       }
     } finally {
