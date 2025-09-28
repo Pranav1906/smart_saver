@@ -31,37 +31,91 @@ class _WhatsAppTabState extends State<WhatsAppTab> {
       _error = null;
     });
     try {
-      if (!await Permission.videos.request().isGranted ||
-          !await Permission.photos.request().isGranted) {
+      // Request storage permissions
+      Map<Permission, PermissionStatus> statuses = await [
+        Permission.storage,
+        Permission.manageExternalStorage,
+        Permission.videos,
+        Permission.photos,
+      ].request();
+
+      print('Permission statuses: $statuses');
+
+      // Check if any storage permission is granted
+      bool hasStoragePermission = statuses[Permission.storage]?.isGranted == true ||
+          statuses[Permission.manageExternalStorage]?.isGranted == true ||
+          statuses[Permission.videos]?.isGranted == true ||
+          statuses[Permission.photos]?.isGranted == true;
+
+      if (!hasStoragePermission) {
         setState(() {
-          _error = 'Storage permission denied';
+          _error = 'Storage permission denied. Please grant storage access in settings.';
           _loading = false;
         });
         return;
       }
-      const legacy = '/storage/emulated/0/WhatsApp/Media/.Statuses';
-      const scoped = '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/.Statuses';
-      Directory statusDir = Directory(legacy);
-      if (!statusDir.existsSync()) statusDir = Directory(scoped);
-      if (!statusDir.existsSync()) {
+
+      // Multiple possible WhatsApp status paths
+      List<String> possiblePaths = [
+        '/storage/emulated/0/WhatsApp/Media/.Statuses',
+        '/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/.Statuses',
+        '/storage/emulated/0/Android/data/com.whatsapp/files/WhatsApp/Media/.Statuses',
+        '/sdcard/WhatsApp/Media/.Statuses',
+        '/sdcard/Android/media/com.whatsapp/WhatsApp/Media/.Statuses',
+      ];
+
+      Directory? statusDir;
+      String foundPath = '';
+
+      for (String path in possiblePaths) {
+        Directory dir = Directory(path);
+        print('Checking path: $path - exists: ${dir.existsSync()}');
+        if (dir.existsSync()) {
+          statusDir = dir;
+          foundPath = path;
+          break;
+        }
+      }
+
+      if (statusDir == null) {
         setState(() {
-          _error = 'WhatsApp Status folder not found. View a status in WhatsApp first!';
+          _error = 'WhatsApp Status folder not found.\n\nPossible reasons:\n• WhatsApp not installed\n• No statuses viewed yet\n• Different Android version\n\nTry viewing some statuses in WhatsApp first!';
           _loading = false;
         });
         return;
       }
-      final files = statusDir
-          .listSync()
-          .where((f) =>
-              f.statSync().type == FileSystemEntityType.file &&
-              (f.path.endsWith('.mp4') || f.path.endsWith('.jpg')))
+
+      print('Found WhatsApp status directory: $foundPath');
+
+      // List all files in the directory
+      List<FileSystemEntity> allFiles = statusDir.listSync();
+      print('Total files found: ${allFiles.length}');
+
+      // Filter for media files
+      List<File> files = allFiles
+          .where((f) {
+            bool isFile = f.statSync().type == FileSystemEntityType.file;
+            bool isMedia = f.path.toLowerCase().endsWith('.mp4') || 
+                          f.path.toLowerCase().endsWith('.jpg') ||
+                          f.path.toLowerCase().endsWith('.jpeg') ||
+                          f.path.toLowerCase().endsWith('.png') ||
+                          f.path.toLowerCase().endsWith('.gif');
+            return isFile && isMedia;
+          })
           .map((f) => File(f.path))
           .toList();
+
+      print('Media files found: ${files.length}');
+      for (File file in files) {
+        print('File: ${file.path}');
+      }
+
       setState(() {
         _statuses = files;
         _loading = false;
       });
     } catch (e) {
+      print('Error fetching statuses: $e');
       setState(() {
         _error = 'Error: $e';
         _loading = false;
