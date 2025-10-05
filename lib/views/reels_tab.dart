@@ -8,8 +8,7 @@ import 'dart:async';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import '../controllers/share_controller.dart';
-import '../widgets/interstitial_ad_manager.dart';
-import '../widgets/rewarded_ad_manager.dart';
+ 
 import 'package:video_player/video_player.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import '../services/download_service.dart';
@@ -142,22 +141,8 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
 
     setState(() => _isLoading = true);
     
-    // Show video ad first
+    // Ads removed: proceed directly
     bool adShown = false;
-    print('Checking if rewarded ad is ready: ${RewardedAdManager.isAdReady}');
-    if (RewardedAdManager.isAdReady) {
-      _showSnackBar("Watch a short video to download your reel!", isLoading: true);
-      adShown = await RewardedAdManager.showRewardedAd();
-      print('Rewarded ad shown: $adShown');
-    } else {
-      print('Rewarded ad not ready, trying to load...');
-      await RewardedAdManager.loadRewardedAd();
-      if (RewardedAdManager.isAdReady) {
-        _showSnackBar("Watch a short video to download your reel!", isLoading: true);
-        adShown = await RewardedAdManager.showRewardedAd();
-        print('Rewarded ad shown after loading: $adShown');
-      }
-    }
     
     // Show processing message
     _showSnackBar("Processing your request... Please wait", isLoading: true);
@@ -192,10 +177,7 @@ class _ReelsTabState extends State<ReelsTab> with SingleTickerProviderStateMixin
 
       // If video ad was shown and finished, don't show interstitial
       // If video ad wasn't shown or didn't finish, show interstitial
-      if (!adShown) {
-        await Future.delayed(const Duration(milliseconds: 1000));
-        await InterstitialAdManager.showInterstitialAd();
-      }
+      // Ads removed
 
       await Future.delayed(const Duration(milliseconds: 500));
       try {
