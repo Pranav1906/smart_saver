@@ -10,7 +10,8 @@ import 'dart:async';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import '../controllers/share_controller.dart';
- 
+import '../widgets/interstitial_ad_manager.dart';
+import '../widgets/rewarded_ad_manager.dart';
 import 'package:video_player/video_player.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import '../config/api_config.dart';
@@ -128,8 +129,22 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
 
     setState(() => _isLoading = true);
     
-    // Ads removed: proceed directly
+    // Show video ad first
     bool adShown = false;
+    print('Checking if rewarded ad is ready: ${RewardedAdManager.isAdReady}');
+    if (RewardedAdManager.isAdReady) {
+      _showSnackBar("Watch a short video to download your short!", isLoading: true);
+      adShown = await RewardedAdManager.showRewardedAd();
+      print('Rewarded ad shown: $adShown');
+    } else {
+      print('Rewarded ad not ready, trying to load...');
+      await RewardedAdManager.loadRewardedAd();
+      if (RewardedAdManager.isAdReady) {
+        _showSnackBar("Watch a short video to download your short!", isLoading: true);
+        adShown = await RewardedAdManager.showRewardedAd();
+        print('Rewarded ad shown after loading: $adShown');
+      }
+    }
     
     // Show processing message
     _showSnackBar("Processing your request... Please wait", isLoading: true);
@@ -183,7 +198,10 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
 
         // If video ad was shown and finished, don't show interstitial
         // If video ad wasn't shown or didn't finish, show interstitial
-        // Ads removed
+        if (!adShown) {
+          await Future.delayed(const Duration(milliseconds: 1000));
+          await InterstitialAdManager.showInterstitialAd();
+        }
 
         await Future.delayed(const Duration(milliseconds: 500));
         try {
