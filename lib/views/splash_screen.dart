@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../widgets/interstitial_ad_manager.dart';
+import '../widgets/rewarded_ad_manager.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -20,10 +22,14 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     );
     _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
     _controller.forward();
-    // Optionally, navigate to the next screen after a delay
-    // Timer(const Duration(seconds: 3), () {
-    //   Navigator.of(context).pushReplacementNamed('/home');
-    // });
+
+    // Preload ads and navigate after first frame without blocking startup
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      InterstitialAdManager.loadInterstitialAd();
+      RewardedAdManager.loadRewardedAd();
+    });
+
+    // Keep splash interaction (no auto-navigation)
   }
 
   @override
