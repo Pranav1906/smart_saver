@@ -167,11 +167,34 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
     }
     
     http.Response? response;
+    // Try to include optional cookies.txt if user has placed it in SmartSaver folder
+    Future<String?> _maybeLoadCookies() async {
+      try {
+        final downloadDir = await _getDownloadPath();
+        final candidatePaths = [
+          File('$downloadDir/cookies.txt'),
+          File('$downloadDir/youtube_cookies.txt'),
+        ];
+        for (final f in candidatePaths) {
+          if (await f.exists()) {
+            final bytes = await f.readAsBytes();
+            if (bytes.isNotEmpty) return base64Encode(bytes);
+          }
+        }
+      } catch (_) {}
+      return null;
+    }
+    final cookiesB64 = await _maybeLoadCookies();
     try {
       response = await http.post(
         Uri.parse(ApiConfig.downloadYoutube),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'url': url, 'quality': 'best', 'type': 'video'}),
+        body: json.encode({
+          'url': url,
+          'quality': 'best',
+          'type': 'video',
+          if (cookiesB64 != null) 'cookiesTxtBase64': cookiesB64,
+        }),
       ).timeout(const Duration(seconds: 75));
     } on SocketException {
       _showSnackBar('Network error. Check your connection.', isError: true);
