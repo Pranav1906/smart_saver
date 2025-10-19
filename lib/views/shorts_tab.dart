@@ -10,7 +10,8 @@ import 'dart:async';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import '../controllers/share_controller.dart';
- 
+import '../widgets/interstitial_ad_manager.dart';
+import '../widgets/rewarded_ad_manager.dart';
 import 'package:video_player/video_player.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import '../config/api_config.dart';
@@ -128,8 +129,22 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
 
     setState(() => _isLoading = true);
     
-    // Ads removed: proceed directly
+    // Show video ad first
     bool adShown = false;
+    print('Checking if rewarded ad is ready: ${RewardedAdManager.isAdReady}');
+    if (RewardedAdManager.isAdReady) {
+      _showSnackBar("Watch a short video to download your short!", isLoading: true);
+      adShown = await RewardedAdManager.showRewardedAd();
+      print('Rewarded ad shown: $adShown');
+    } else {
+      print('Rewarded ad not ready, trying to load...');
+      await RewardedAdManager.loadRewardedAd();
+      if (RewardedAdManager.isAdReady) {
+        _showSnackBar("Watch a short video to download your short!", isLoading: true);
+        adShown = await RewardedAdManager.showRewardedAd();
+        print('Rewarded ad shown after loading: $adShown');
+      }
+    }
     
     // Show processing message
     _showSnackBar("Processing your request... Please wait", isLoading: true);
@@ -152,11 +167,34 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
     }
     
     http.Response? response;
+    // Try to include optional cookies.txt if user has placed it in SmartSaver folder
+    Future<String?> _maybeLoadCookies() async {
+      try {
+        final downloadDir = await _getDownloadPath();
+        final candidatePaths = [
+          File('$downloadDir/cookies.txt'),
+          File('$downloadDir/youtube_cookies.txt'),
+        ];
+        for (final f in candidatePaths) {
+          if (await f.exists()) {
+            final bytes = await f.readAsBytes();
+            if (bytes.isNotEmpty) return base64Encode(bytes);
+          }
+        }
+      } catch (_) {}
+      return null;
+    }
+    final cookiesB64 = await _maybeLoadCookies();
     try {
       response = await http.post(
         Uri.parse(ApiConfig.downloadYoutube),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'url': url, 'quality': 'best', 'type': 'video'}),
+        body: json.encode({
+          'url': url,
+          'quality': 'best',
+          'type': 'video',
+          if (cookiesB64 != null) 'cookiesTxtBase64': cookiesB64,
+        }),
       ).timeout(const Duration(seconds: 75));
     } on SocketException {
       _showSnackBar('Network error. Check your connection.', isError: true);
@@ -183,7 +221,10 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
 
         // If video ad was shown and finished, don't show interstitial
         // If video ad wasn't shown or didn't finish, show interstitial
-        // Ads removed
+        if (!adShown) {
+          await Future.delayed(const Duration(milliseconds: 1000));
+          await InterstitialAdManager.showInterstitialAd();
+        }
 
         await Future.delayed(const Duration(milliseconds: 500));
         try {

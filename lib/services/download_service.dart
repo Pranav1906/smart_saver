@@ -80,25 +80,11 @@ class DownloadService {
     final endpoint = getApiEndpoint(platform);
     
     try {
-      Future<http.Response> send() {
-        return http.post(
-          Uri.parse(endpoint),
-          headers: {'Content-Type': 'application/json'},
-          body: json.encode({'url': url, 'quality': 'best'}),
-        );
-      }
-
-      http.Response response = await send().timeout(const Duration(seconds: 45));
-
-      // If rate-limited, retry with exponential backoff a few times
-      int attempt = 0;
-      while ((response.statusCode == 429 || response.statusCode == 503) && attempt < 3) {
-        attempt++;
-        final retryAfterHeader = response.headers['retry-after'];
-        final retryAfterSeconds = int.tryParse(retryAfterHeader ?? '') ?? (attempt * 2 + 2);
-        await Future.delayed(Duration(seconds: retryAfterSeconds));
-        response = await send().timeout(const Duration(seconds: 45));
-      }
+      final response = await http.post(
+        Uri.parse(endpoint),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'url': url, 'quality': 'best'}),
+      ).timeout(const Duration(seconds: 45));
 
       if (response.statusCode == 200) {
         return json.decode(response.body);

@@ -5,7 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:video_player/video_player.dart';
 import '../controllers/share_controller.dart';
- 
+import '../widgets/interstitial_ad_manager.dart';
 
 class WhatsAppTab extends StatefulWidget {
   const WhatsAppTab({Key? key}) : super(key: key);
@@ -133,7 +133,11 @@ class _WhatsAppTabState extends State<WhatsAppTab> {
       ),
     );
     
-    // Ads removed
+    // Show interstitial ad after successful save
+    if (result['isSuccess'] == true) {
+      await Future.delayed(const Duration(milliseconds: 1000));
+      await InterstitialAdManager.showInterstitialAd();
+    }
   }
 
   @override
