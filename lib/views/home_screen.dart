@@ -56,7 +56,7 @@ class HomeScreen extends StatelessWidget {
             ),
             tabs: [
               Tab(text: 'Reels'),
-              Tab(text: 'Shorts'),
+              Tab(text: 'Smart Link'),
               Tab(text: 'WhatsApp'),
             ],
           ),

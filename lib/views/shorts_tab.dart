@@ -116,8 +116,9 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
       _showSnackBar("Please enter a valid URL");
       return;
     }
-    if (!url.contains("youtube.com") && !url.contains("youtu.be")) {
-      _showSnackBar("Please enter a valid YouTube Shorts URL", isError: true);
+    // Generic URL validation - accept any video link
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      _showSnackBar("Please enter a valid video link", isError: true);
       return;
     }
 
@@ -133,14 +134,14 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
     bool adShown = false;
     print('Checking if rewarded ad is ready: ${RewardedAdManager.isAdReady}');
     if (RewardedAdManager.isAdReady) {
-      _showSnackBar("Watch a short video to download your short!", isLoading: true);
+      _showSnackBar("Watch a short video to download your video!", isLoading: true);
       adShown = await RewardedAdManager.showRewardedAd();
       print('Rewarded ad shown: $adShown');
     } else {
       print('Rewarded ad not ready, trying to load...');
       await RewardedAdManager.loadRewardedAd();
       if (RewardedAdManager.isAdReady) {
-        _showSnackBar("Watch a short video to download your short!", isLoading: true);
+        _showSnackBar("Watch a short video to download your video!", isLoading: true);
         adShown = await RewardedAdManager.showRewardedAd();
         print('Rewarded ad shown after loading: $adShown');
       }
@@ -173,7 +174,7 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
         final downloadDir = await _getDownloadPath();
         final candidatePaths = [
           File('$downloadDir/cookies.txt'),
-          File('$downloadDir/youtube_cookies.txt'),
+          File('$downloadDir/video_cookies.txt'),
         ];
         for (final f in candidatePaths) {
           if (await f.exists()) {
@@ -187,7 +188,7 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
     final cookiesB64 = await _maybeLoadCookies();
     try {
       response = await http.post(
-        Uri.parse(ApiConfig.downloadYoutube),
+        Uri.parse(ApiConfig.downloadVideo),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'url': url,
@@ -315,7 +316,7 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
     );
   }
 
-  String _getPlatformHint() => 'e.g., https://youtube.com/shorts/...';
+  String _getPlatformHint() => 'Paste video link here...';
 
   @override
   Widget build(BuildContext context) {
@@ -361,7 +362,7 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  'Download Shorts',
+                  'Smart Link Parser',
                   style: GoogleFonts.montserrat(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -372,11 +373,21 @@ class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMix
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Paste your YouTube Shorts link below:',
+                  'Browser-Based Saver',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: Colors.white70,
                         fontWeight: FontWeight.w500,
                         letterSpacing: 0.5,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Paste Video Link to Save',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.white60,
+                        fontWeight: FontWeight.w400,
+                        fontSize: 14,
                       ),
                   textAlign: TextAlign.center,
                 ),

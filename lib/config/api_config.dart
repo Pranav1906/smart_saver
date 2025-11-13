@@ -5,7 +5,7 @@ class ApiConfig {
   // API endpoints
   static String get healthCheck => '$baseUrl/health';
   static String get videoInfo => '$baseUrl/video/info';
-  static String get downloadYoutube => '$baseUrl/download/youtube';
+  static String get downloadVideo => '$baseUrl/download/video';
   static String get downloadInstagram => '$baseUrl/download/instagram';
   static String get downloadFacebook => '$baseUrl/download/facebook';
   static String get downloadAuto => '$baseUrl/download/auto';
