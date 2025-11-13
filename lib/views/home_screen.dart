@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../widgets/banner_ad_widget.dart';
 import 'reels_tab.dart';
-import 'shorts_tab.dart';
+import 'smart_link_tab.dart';
 import 'whatsapp_tab.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -75,7 +75,7 @@ class HomeScreen extends StatelessWidget {
                 child: const TabBarView(
                   children: [
                     ReelsTab(),
-                    ShortsTab(),
+                    SmartLinkTab(),
                     WhatsAppTab(),
                   ],
                 ),

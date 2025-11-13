@@ -21,7 +21,7 @@
   - Settings or info screen
 
 ### 4. Short Description (80 characters max)
-"Download Instagram Reels, YouTube Shorts & WhatsApp Status videos easily"
+"Download Instagram Reels,& WhatsApp Status videos easily"
 
 ### 5. Full Description (4000 characters max)
 ```
@@ -34,8 +34,7 @@ Download and save your favorite videos from popular social media platforms with 
 • High-quality video downloads
 • Easy-to-use interface
 
-📱 YOUTUBE SHORTS
-• Download YouTube Shorts videos
+
 • Best quality available
 • Fast and reliable downloads
 
@@ -87,7 +86,6 @@ Note: This app is for downloading publicly available content only. Please respec
 ### 8. Keywords (for ASO)
 - video downloader
 - instagram downloader
-- youtube shorts downloader
 - whatsapp status saver
 - social media downloader
 - video saver

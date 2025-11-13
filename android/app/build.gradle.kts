@@ -32,7 +32,7 @@ android {
         applicationId = "com.smartsaver1906.app"
         minSdk = 21
         targetSdk = 35
-        versionCode = 5
+        versionCode = 7
         versionName = "1.1.0"
     }
 

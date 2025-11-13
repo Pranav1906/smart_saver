@@ -37,7 +37,6 @@
 
 1. **App Details**
    - **App name**: Smart Saver
-   - **Short description**: "Download Instagram Reels, YouTube Shorts & WhatsApp Status videos easily"
    - **Full description**: Use the content from `PLAY_STORE_ASSETS.md`
 
 2. **Graphics**
@@ -79,7 +78,7 @@ Complete the content rating questionnaire:
 
 2. **Release Notes**
    - Add release notes for version 1.0.0
-   - Example: "Initial release of Smart Saver - Download videos from Instagram, YouTube, and WhatsApp"
+   - Example: "Initial release of Smart Saver - Download videos from Instagram, and WhatsApp"
 
 ### Step 6: Review Process
 
@@ -120,7 +119,6 @@ Complete the content rating questionnaire:
 ## 📱 App Features Ready
 
 - ✅ Instagram Reels download
-- ✅ YouTube Shorts download
 - ✅ WhatsApp Status save
 - ✅ Video preview and sharing
 - ✅ Banner ads integration

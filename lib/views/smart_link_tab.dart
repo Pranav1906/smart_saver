@@ -16,14 +16,14 @@ import 'package:video_player/video_player.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import '../config/api_config.dart';
 
-class ShortsTab extends StatefulWidget {
-  const ShortsTab({Key? key}) : super(key: key);
+class SmartLinkTab extends StatefulWidget {
+  const SmartLinkTab({Key? key}) : super(key: key);
 
   @override
-  State<ShortsTab> createState() => _ShortsTabState();
+  State<SmartLinkTab> createState() => _SmartLinkTabState();
 }
 
-class _ShortsTabState extends State<ShortsTab> with SingleTickerProviderStateMixin {
+class _SmartLinkTabState extends State<SmartLinkTab> with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
